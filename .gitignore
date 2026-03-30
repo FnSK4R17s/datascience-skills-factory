@@ -7,6 +7,14 @@ whitepaper-output/
 # Archived docs (fetched on demand, not committed)
 docs/
 
+# Installed skills and editor configs (local, not shipped)
+.agents/
+.beary/
+.claude/
+.kilocode/
+.windsurf/
+skills-lock.json
+
 # Python
 __pycache__/
 *.pyc
