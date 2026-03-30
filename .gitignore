@@ -13,7 +13,6 @@ docs/
 .claude/
 .kilocode/
 .windsurf/
-skills-lock.json
 
 # Python
 __pycache__/
