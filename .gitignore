@@ -1,0 +1,17 @@
+# BEARY research scratchpad (regenerable, not committed)
+beary-scratchpad/
+
+# Whitepaper output (regenerable from scratchpad)
+whitepaper-output/
+
+# Archived docs (fetched on demand, not committed)
+docs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Environment
+.env
