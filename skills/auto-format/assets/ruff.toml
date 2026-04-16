@@ -1,0 +1,23 @@
+# ruff.toml — Python formatter + linter config
+# Docs: https://docs.astral.sh/ruff/configuration/
+
+line-length = 88
+target-version = "py311"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+
+[lint.per-file-ignores]
+"tests/**" = ["S101"]  # allow assert in tests

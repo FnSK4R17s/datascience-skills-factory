@@ -29,6 +29,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 |-------|-------------|---------|
 | [langfuse-tracing](skills/langfuse-tracing/) | Instrument LLM apps with Langfuse v4 — `@observe` tracing, LangChain/OpenAI integrations, cost tracking, prompt management, evaluation, debugging | `npx skills add FnSK4R17s/datascience-skills-factory --skill langfuse-tracing` |
 | [prd-karpathy-style](skills/prd-karpathy-style/) | Generate Karpathy-style PRDs — opinionated idea docs designed to be handed to LLM agents for implementation | `npx skills add FnSK4R17s/datascience-skills-factory --skill prd-karpathy-style` |
+| [auto-format](skills/auto-format/) | Detect project languages, install formatters (ruff, prettier, rustfmt), generate configs, and wire up a PostToolUse hook for automatic formatting on every file write | `npx skills add FnSK4R17s/datascience-skills-factory --skill auto-format` |
 
 ## Skill Structure
 
