@@ -1,22 +1,54 @@
 #!/usr/bin/env bash
-# generate-logo.sh — Download Fluent 3D emoji PNGs and composite into a logo
+# generate-logo.sh — Read branding.yml, download Fluent 3D emoji PNGs, composite into logos
 #
 # Usage:
-#   generate-logo.sh --skill <skill-name>    # Generate logo for a specific skill
-#   generate-logo.sh --all                   # Generate logos for all skills missing one
-#   generate-logo.sh --repo                  # Generate the repo-level logo
-#   generate-logo.sh --emojis "🏭🔍" --output path/to/logo.png  # Custom
+#   generate-logo.sh --config branding.yml --skill <skill-name>
+#   generate-logo.sh --config branding.yml --all
+#   generate-logo.sh --config branding.yml --repo
 #
-# Requires: python3, Pillow (pip install Pillow), curl
+# Requires: python3, Pillow, PyYAML, curl
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CACHE_DIR="${HOME}/.cache/factory-branding/fluent-emoji"
 COMPOSE_SCRIPT="$SCRIPT_DIR/compose_logo.py"
 
-# Emoji name to Fluent 3D asset folder mapping
+CONFIG=""
+MODE=""
+SKILL_NAME=""
+
+# ── Parse arguments ──────────────────────────────────────────────
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) CONFIG="$2"; shift 2 ;;
+    --skill)  MODE="skill"; SKILL_NAME="$2"; shift 2 ;;
+    --all)    MODE="all"; shift ;;
+    --repo)   MODE="repo"; shift ;;
+    *)        echo "Unknown flag: $1"; exit 1 ;;
+  esac
+done
+
+if [[ -z "$CONFIG" ]]; then
+  echo "ERROR: --config <path-to-branding.yml> is required"
+  echo "Usage:"
+  echo "  $0 --config branding.yml --skill <skill-name>"
+  echo "  $0 --config branding.yml --all"
+  echo "  $0 --config branding.yml --repo"
+  exit 1
+fi
+
+if [[ ! -f "$CONFIG" ]]; then
+  echo "ERROR: Config not found: $CONFIG"
+  exit 1
+fi
+
+REPO_ROOT="$(cd "$(dirname "$CONFIG")" && pwd)"
+
+# ── Emoji name to Fluent folder lookup ───────────────────────────
+# This is the canonical mapping. Add new entries here when new emojis are used.
+
 declare -A EMOJI_FOLDERS=(
   ["🏭"]="Factory"
   ["🔍"]="Magnifying glass tilted left"
@@ -27,26 +59,89 @@ declare -A EMOJI_FOLDERS=(
   ["🔬"]="Microscope"
   ["✨"]="Sparkles"
   ["🎪"]="Circus tent"
+  ["⚓"]="Anchor"
+  ["🦞"]="Lobster"
+  ["🏠"]="House"
+  ["🔐"]="Locked with key"
+  ["💪"]="Flexed biceps"
+  ["🔭"]="Telescope"
+  ["📚"]="Books"
+  ["🧠"]="Brain"
+  ["🚪"]="Door"
+  ["🧪"]="Test tube"
+  ["🧬"]="Dna"
+  ["📈"]="Chart increasing"
+  ["🔧"]="Wrench"
+  ["🌐"]="Globe with meridians"
+  ["📦"]="Package"
+  ["🔗"]="Link"
+  ["⚡"]="High voltage"
+  ["🛡️"]="Shield"
+  ["📝"]="Memo"
+  ["🎯"]="Direct hit"
+  ["🔄"]="Counterclockwise arrows button"
+  ["🏗️"]="Building construction"
 )
 
-# Skill to emoji suffix mapping
-declare -A SKILL_EMOJIS=(
-  ["auto-format"]="🏭 🎨"
-  ["langfuse-tracing"]="🏭 📡"
-  ["prd-karpathy-style"]="🏭 📋"
-  ["qmd-search"]="🏭 🔍"
-  ["factory-branding"]="🏭 🎪"
-)
+# ── YAML parsing via Python (avoids yq dependency) ───────────────
 
-# Repo-level emojis (factory goes last here)
-REPO_EMOJIS="📊 🔬 ✨ 🏭"
+yaml_get() {
+  local key="$1"
+  python3 -c "
+import yaml, sys
+with open('$CONFIG') as f:
+    cfg = yaml.safe_load(f)
+keys = '$key'.split('.')
+v = cfg
+for k in keys:
+    if isinstance(v, list):
+        v = v[int(k)]
+    else:
+        v = v[k]
+print(v)
+" 2>/dev/null
+}
+
+yaml_list() {
+  local key="$1"
+  python3 -c "
+import yaml, sys
+with open('$CONFIG') as f:
+    cfg = yaml.safe_load(f)
+keys = '$key'.split('.')
+v = cfg
+for k in keys:
+    if isinstance(v, list):
+        v = v[int(k)]
+    else:
+        v = v[k]
+if isinstance(v, list):
+    for item in v:
+        print(item)
+else:
+    print(v)
+"
+}
+
+yaml_skill_names() {
+  python3 -c "
+import yaml
+with open('$CONFIG') as f:
+    cfg = yaml.safe_load(f)
+for name in cfg.get('skills', {}):
+    print(name)
+"
+}
+
+# ── Download a single Fluent 3D emoji PNG ────────────────────────
 
 download_emoji() {
   local emoji="$1"
   local folder="${EMOJI_FOLDERS[$emoji]:-}"
 
   if [[ -z "$folder" ]]; then
-    echo "ERROR: No Fluent folder mapping for emoji: $emoji"
+    echo "ERROR: No Fluent folder mapping for emoji: $emoji" >&2
+    echo "Add it to EMOJI_FOLDERS in generate-logo.sh" >&2
     return 1
   fi
 
@@ -61,7 +156,6 @@ download_emoji() {
 
   mkdir -p "$CACHE_DIR"
 
-  # URL-encode the folder name for GitHub raw URL
   local encoded_folder
   encoded_folder=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$folder'))")
   local url="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/${encoded_folder}/3D/${safe_name}_3d.png"
@@ -76,69 +170,118 @@ download_emoji() {
   fi
 }
 
-generate_for_emojis() {
-  local emoji_string="$1"
-  local output="$2"
+# ── Build emoji list for a skill ─────────────────────────────────
+
+get_skill_emojis() {
+  local skill="$1"
+
+  # Base mark emojis
+  local base_emojis
+  base_emojis=$(python3 -c "
+import yaml
+with open('$CONFIG') as f:
+    cfg = yaml.safe_load(f)
+for entry in cfg['base_mark']:
+    print(entry['emoji'])
+")
+
+  # Skill suffix emojis
+  local suffix_emojis
+  suffix_emojis=$(python3 -c "
+import yaml
+with open('$CONFIG') as f:
+    cfg = yaml.safe_load(f)
+for e in cfg['skills']['$skill']['suffix']:
+    print(e)
+")
+
+  # Skills: base first, then suffix
+  echo "$base_emojis"
+  echo "$suffix_emojis"
+}
+
+# ── Composite a list of emojis into a logo ───────────────────────
+
+generate_logo() {
+  local output="$1"
+  shift
+  local emojis=("$@")
+
+  local height
+  height=$(yaml_get "defaults.pixel_height" 2>/dev/null || echo "168")
+  local gap
+  gap=$(yaml_get "defaults.gap" 2>/dev/null || echo "8")
 
   local image_paths=()
-  for emoji in $emoji_string; do
+  for emoji in "${emojis[@]}"; do
     local path
     path=$(download_emoji "$emoji")
     image_paths+=("$path")
   done
 
-  python3 "$COMPOSE_SCRIPT" --images "${image_paths[@]}" --output "$output"
+  python3 "$COMPOSE_SCRIPT" \
+    --images "${image_paths[@]}" \
+    --output "$output" \
+    --height "$height" \
+    --gap "$gap"
 }
+
+# ── Generate for a single skill ─────────────────────────────────
 
 generate_for_skill() {
   local skill="$1"
-  local emojis="${SKILL_EMOJIS[$skill]:-}"
-
-  if [[ -z "$emojis" ]]; then
-    echo "ERROR: No emoji mapping for skill: $skill"
-    echo "Add it to SKILL_EMOJIS in this script and to SKILL.md suffix table."
-    exit 1
-  fi
-
   local output="$REPO_ROOT/skills/$skill/logo.png"
+
   echo "Generating logo for $skill..."
-  generate_for_emojis "$emojis" "$output"
+
+  local emojis=()
+  while IFS= read -r e; do
+    emojis+=("$e")
+  done < <(get_skill_emojis "$skill")
+
+  generate_logo "$output" "${emojis[@]}"
 }
 
-# Parse arguments
-case "${1:-}" in
-  --skill)
-    [[ -z "${2:-}" ]] && echo "Usage: $0 --skill <skill-name>" && exit 1
-    generate_for_skill "$2"
+# ── Generate repo-level logo ────────────────────────────────────
+
+generate_for_repo() {
+  local output_path
+  output_path=$(yaml_get "repo.output" 2>/dev/null || echo "logo.png")
+  local output="$REPO_ROOT/$output_path"
+
+  echo "Generating repo-level logo..."
+
+  local emojis=()
+  while IFS= read -r e; do
+    emojis+=("$e")
+  done < <(yaml_list "repo.emojis")
+
+  generate_logo "$output" "${emojis[@]}"
+}
+
+# ── Main dispatch ────────────────────────────────────────────────
+
+case "$MODE" in
+  skill)
+    generate_for_skill "$SKILL_NAME"
     ;;
 
-  --all)
-    for skill in "${!SKILL_EMOJIS[@]}"; do
+  all)
+    while IFS= read -r skill; do
       if [[ ! -f "$REPO_ROOT/skills/$skill/logo.png" ]]; then
         generate_for_skill "$skill"
       else
         echo "Skipping $skill (logo.png exists)"
       fi
-    done
+    done < <(yaml_skill_names)
     ;;
 
-  --repo)
-    echo "Generating repo-level logo..."
-    generate_for_emojis "$REPO_EMOJIS" "$REPO_ROOT/logo.png"
-    ;;
-
-  --emojis)
-    [[ -z "${2:-}" || -z "${3:-}" || "$3" != "--output" || -z "${4:-}" ]] && \
-      echo "Usage: $0 --emojis \"🏭🔍\" --output path/to/logo.png" && exit 1
-    generate_for_emojis "$2" "$4"
+  repo)
+    generate_for_repo
     ;;
 
   *)
-    echo "Usage:"
-    echo "  $0 --skill <skill-name>              Generate logo for a specific skill"
-    echo "  $0 --all                              Generate logos for all skills missing one"
-    echo "  $0 --repo                             Generate the repo-level logo"
-    echo "  $0 --emojis \"🏭 🔍\" --output logo.png  Custom emoji composition"
+    echo "ERROR: Specify --skill <name>, --all, or --repo"
     exit 1
     ;;
 esac

@@ -1,0 +1,61 @@
+# branding.yml — Logo definitions for the Data Science Skills Factory ecosystem
+# Read by the factory-branding skill to generate logo.png files.
+
+# Brand identity
+brand:
+  name: Data Science Skills Factory
+  tagline: "Production-grade skills for AI coding agents."
+  source: fluent-3d  # Microsoft Fluent Emoji 3D
+
+# Base mark — appears in every logo
+base_mark:
+  - emoji: "🏭"
+    name: Factory
+    role: "The brand anchor — built in the factory"
+
+# Display sizes (height attribute in README <img> tags)
+display:
+  base_only:
+    height: 97       # logos with just base mark (unused currently)
+  with_suffix:
+    height: 88       # base + suffix (most skills)
+  repo_level:
+    height: 97       # repo-level logo (more emojis, taller)
+
+# Logo generation defaults
+defaults:
+  pixel_height: 168  # actual PNG height before README scaling
+  gap: 8             # pixels between composited emojis
+  background: transparent
+
+# Repo-level logo — base mark goes LAST
+repo:
+  emojis: ["📊", "🔬", "✨", "🏭"]
+  output: logo.png
+
+# Per-skill logos — base mark goes FIRST
+skills:
+  auto-format:
+    suffix: ["🎨"]
+    name: Artist palette
+    reason: "Styling, formatting, beautification"
+
+  langfuse-tracing:
+    suffix: ["📡"]
+    name: Satellite antenna
+    reason: "Signals, telemetry, observability"
+
+  prd-karpathy-style:
+    suffix: ["📋"]
+    name: Clipboard
+    reason: "Specs, documents, planning"
+
+  qmd-search:
+    suffix: ["🔍"]
+    name: Magnifying glass
+    reason: "Search, discovery, retrieval"
+
+  factory-branding:
+    suffix: ["🎪"]
+    name: Circus tent
+    reason: "The showroom, presentation, branding"

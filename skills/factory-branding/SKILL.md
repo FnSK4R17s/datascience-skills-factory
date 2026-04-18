@@ -1,164 +1,181 @@
 ---
 name: factory-branding
 description: >
-  Generate branded logos and README headers for Data Science Skills Factory
-  skills and repos. Uses the Fluent 3D emoji composition system — a base mark
-  plus per-skill suffix emojis rendered as transparent PNGs via Pillow.
-  Use when creating a new skill, when a skill README is missing a logo,
+  Generate branded logos and README headers using a config-driven Fluent 3D
+  emoji composition system. Reads branding.yml from the repo root to determine
+  base mark, per-skill/per-repo suffix emojis, and display sizes. Works for
+  any ecosystem that follows the config schema — not hardcoded to a specific
+  brand. Use when creating a new skill or repo, when a README is missing a logo,
   when the user asks about branding, or when you need to generate a logo.png.
   Triggers on: "logo", "branding", "generate logo", "add logo", "skill logo",
-  "brand", "README header".
+  "brand", "README header", "branding.yml".
 ---
 
 # Factory Branding Skill
 
-Generate logos and branded README headers for skills in the Data Science
-Skills Factory ecosystem.
+Generate logos and branded README headers for any ecosystem that provides a
+`branding.yml` config file.
 
-## Design System
+## Config File: `branding.yml`
 
-### Base Mark
+The skill reads `branding.yml` from the repo root. This file defines the
+entire brand identity — base mark, suffix emojis, display sizes, and generation
+defaults. The skill itself contains no hardcoded emoji mappings.
 
-Every skill and repo in the factory ecosystem uses the same base emoji —
-the **Factory signature**:
+### Schema
 
-| Emoji | Name | Role |
-|-------|------|------|
-| 🏭 | Factory | The brand anchor — "built in the factory" |
+```yaml
+# Brand identity
+brand:
+  name: "Ecosystem Name"
+  tagline: "One-line description."
+  source: fluent-3d                    # emoji source (only fluent-3d supported)
 
-### Skill Suffix
+# Base mark — appears in every logo
+base_mark:
+  - emoji: "🏭"
+    name: Factory
+    role: "Why this emoji represents the brand"
+  # Multi-emoji base marks supported (e.g. CommandClaw uses ⚓🦞)
+  # - emoji: "⚓"
+  #   name: Anchor
+  #   role: "Stability, control"
 
-Each skill appends one or two emojis that represent its purpose:
+# Display sizes (height attr in README <img> tags)
+display:
+  base_only:
+    height: 97
+  with_suffix:
+    height: 88
+  repo_level:
+    height: 97
 
-| Skill | Suffix | Full Mark | Reasoning |
-|-------|--------|-----------|-----------|
-| **datascience-skills-factory** | 📊🔬✨ | 📊🔬✨🏭 | Bar chart + microscope + sparkles — data science, research, magic (repo-level, 4 emoji) |
-| **auto-format** | 🎨 | 🏭🎨 | Art palette — styling, formatting |
-| **langfuse-tracing** | 📡 | 🏭📡 | Satellite dish — signals, telemetry, observability |
-| **prd-karpathy-style** | 📋 | 🏭📋 | Clipboard — specs, documents, planning |
-| **qmd-search** | 🔍 | 🏭🔍 | Magnifying glass — search, discovery |
-| **factory-branding** | 🎪 | 🏭🎪 | Circus tent — the showroom, presentation |
+# Generation defaults
+defaults:
+  pixel_height: 168                    # actual PNG pixel height
+  gap: 8                               # pixels between emojis
+  background: transparent
 
-### Adding a New Skill
+# Repo-level logo
+repo:
+  emojis: ["📊", "🔬", "✨", "🏭"]   # full emoji sequence
+  output: logo.png                     # path relative to repo root
 
-When a new skill is created, pick a suffix emoji that:
-1. Represents the skill's primary function at a glance
-2. Is distinct from existing suffixes (no duplicates)
-3. Exists in Microsoft Fluent 3D emoji set
-4. Is a single emoji (two max for repo-level logos)
+# Per-skill (or per-sub-repo) logos
+skills:                                # key = directory name under skills/
+  my-skill:
+    suffix: ["🔍"]                     # appended after base_mark
+    name: "Magnifying glass"
+    reason: "Search, discovery"
+```
 
-Add the new entry to the suffix table above.
+### Emoji Ordering Convention
 
-## How to Generate a Logo
+- **Skill logos**: base mark goes **first**, suffix appended after
+- **Repo-level logo**: base mark goes **last** (suffix emojis lead)
+- This is configurable — `repo.emojis` is the literal sequence used
 
-### Method: Pillow Composite
+### Multi-Emoji Base Marks
 
-Use `scripts/generate-logo.sh` which wraps the Pillow compositing script:
+Some ecosystems use multiple emojis as their base mark. Example:
 
+```yaml
+base_mark:
+  - emoji: "⚓"
+    name: Anchor
+    role: "Stability, control"
+  - emoji: "🦞"
+    name: Lobster
+    role: "The Claw — core identity"
+```
+
+This produces ⚓🦞 as the base, with suffixes appended: ⚓🦞🔍
+
+## Decision Tree
+
+### 1. Locate Config
+
+Look for `branding.yml` at the repo root. If missing:
+- Ask the user if they want to create one
+- Use the schema above as a template
+- Fill in base mark and any existing skills
+
+### 2. Validate Config
+
+Check that:
+- `brand.source` is `fluent-3d` (only supported source)
+- `base_mark` has at least one entry
+- Each skill in `skills:` has a `suffix` array
+- No duplicate suffix emojis across skills
+
+### 3. Generate Logos
+
+For a specific skill:
 ```bash
-# Generate for a specific skill
-./scripts/generate-logo.sh --skill qmd-search
-
-# Generate for all skills missing a logo
-./scripts/generate-logo.sh --all
-
-# Generate the repo-level logo
-./scripts/generate-logo.sh --repo
+./scripts/generate-logo.sh --config ../../branding.yml --skill <skill-name>
 ```
 
-### Manual Method (Pillow script directly)
-
+For all skills missing a logo:
 ```bash
-python scripts/compose_logo.py --emojis "🏭🔍" --output skills/qmd-search/logo.png
+./scripts/generate-logo.sh --config ../../branding.yml --all
 ```
 
-### Source Assets
-
-- **Font**: Microsoft Fluent Emoji 3D — [GitHub repo](https://github.com/microsoft/fluentui-emoji)
-- **Method**: Download individual emoji PNGs from the Fluent repo, composite side-by-side at equal height
-- **Background**: Transparent PNG (RGBA)
-- **Output**: `logo.png` in the skill directory
-
-### Finding Fluent 3D Emoji PNGs
-
-Fluent emoji assets live at paths like:
-```
-fluentui-emoji/assets/<Emoji Name>/3D/<emoji_name>_3d.png
+For the repo-level logo:
+```bash
+./scripts/generate-logo.sh --config ../../branding.yml --repo
 ```
 
-Map Unicode emoji to folder names:
-| Emoji | Folder name |
-|-------|-------------|
-| 🏭 | Factory |
-| 🔍 | Magnifying glass tilted left |
-| 🎨 | Artist palette |
-| 📡 | Satellite antenna |
-| 📋 | Clipboard |
-| 📊 | Bar chart |
-| 🔬 | Microscope |
-| ✨ | Sparkles |
-| 🎪 | Circus tent |
+### 4. Update READMEs
 
-## Display Sizes
-
-| Emoji count | README height | Example |
-|-------------|---------------|---------|
-| 2 (base + suffix) | `height="88"` | Most skills |
-| 3+ (repo-level) | `height="97"` | datascience-skills-factory |
-
-## README Template
-
-### Skill-level README header
+After generating `logo.png`, ensure the skill README uses this header pattern:
 
 ```html
 <p align="center">
-  <img src="logo.png" alt="<Skill Name>" height="88">
+  <img src="logo.png" alt="<Skill Name>" height="<display.with_suffix.height>">
 </p>
 
 <h1 align="center"><Skill Name></h1>
 
 <p align="center">
   <strong><One-line tagline></strong><br>
-  <sub>Part of <a href="../../">Data Science Skills Factory</a></sub>
+  <sub>Part of <a href="../../"><brand.name></a></sub>
 </p>
 
 ---
 ```
 
-### Repo-level README header
+Heights come from `branding.yml`:
+- Skills with suffix: `display.with_suffix.height`
+- Base-only logos: `display.base_only.height`
+- Repo-level: `display.repo_level.height`
 
-```html
-<p align="center">
-  <img src="logo.png" alt="Data Science Skills Factory" height="97">
-</p>
+### 5. Register New Skills
 
-<h1 align="center">Data Science Skills Factory</h1>
+When a new skill is created and needs a logo:
+1. Pick a suffix emoji (single emoji, must exist in Fluent 3D set, no duplicates)
+2. Add entry to `branding.yml` under `skills:`
+3. Run `generate-logo.sh --config branding.yml --skill <name>`
+4. Add the README header
 
-<p align="center">
-  <strong><Tagline></strong><br>
-  <em><Subtitle></em><br>
-  <sub><Footnote></sub>
-</p>
-```
+## Fluent 3D Emoji Source
+
+Logos use PNGs from [Microsoft Fluent Emoji 3D](https://github.com/microsoft/fluentui-emoji).
+
+Asset paths: `fluentui-emoji/assets/<Emoji Name>/3D/<emoji_name>_3d.png`
+
+See `references/fluent-emoji-map.md` for the name → folder mapping.
 
 ## Rules
 
-- **Always include the factory emoji** (🏭) — it's the brand anchor
+- **Always include the base mark** — defined in `branding.yml`, not optional
 - **One suffix emoji per skill** (two max for repo-level)
-- **Factory emoji goes first** for skills, last for the repo-level logo
 - **Use Fluent 3D style only** — no Twemoji, no Apple emoji, no flat icons
 - **Transparent background** — works on light and dark themes
-- **No text in the logo** — the skill/repo name goes in the `<h1>` below it
-- **Logo file**: always `logo.png` at the skill or repo root
-
-## Cross-Reference: CommandClaw Conventions
-
-This system mirrors the [CommandClaw logo conventions](https://github.com/FnSK4R17s/commandclaw/blob/main/guiding_docs/LOGO_CONVENTIONS.md)
-but uses 🏭 as the base mark instead of ⚓🦞. The generation method, display
-sizes, README patterns, and rules are intentionally parallel.
+- **No text in the logo** — name goes in the `<h1>` below it
+- **Logo file**: always `logo.png` at skill or repo root
 
 ## Additional Resources
 
-- `scripts/compose_logo.py` — Pillow script for compositing emoji PNGs
-- `scripts/generate-logo.sh` — Shell wrapper for common logo generation tasks
-- `references/fluent-emoji-map.md` — Common emoji to Fluent folder name mappings
+- `references/fluent-emoji-map.md` — emoji → Fluent folder name mappings
+- `scripts/compose_logo.py` — Pillow compositor
+- `scripts/generate-logo.sh` — Shell wrapper that reads branding.yml
