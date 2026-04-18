@@ -1,4 +1,8 @@
-<h1 align="center">🎨🏭 auto-format</h1>
+<p align="center">
+  <img src="logo.png" alt="auto-format" height="88">
+</p>
+
+<h1 align="center">auto-format</h1>
 
 <p align="center">
   <strong>Automatic code formatting on every file write.</strong><br>

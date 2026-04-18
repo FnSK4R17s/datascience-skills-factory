@@ -1,4 +1,8 @@
-<h1 align="center">📋🏭 prd-karpathy-style</h1>
+<p align="center">
+  <img src="logo.png" alt="prd-karpathy-style" height="88">
+</p>
+
+<h1 align="center">prd-karpathy-style</h1>
 
 <p align="center">
   <strong>Opinionated PRDs designed to be handed to LLM agents.</strong><br>

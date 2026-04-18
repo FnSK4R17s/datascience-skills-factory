@@ -1,4 +1,8 @@
-<h1 align="center">📡🏭 langfuse-tracing</h1>
+<p align="center">
+  <img src="logo.png" alt="langfuse-tracing" height="88">
+</p>
+
+<h1 align="center">langfuse-tracing</h1>
 
 <p align="center">
   <strong>LLM observability with Langfuse v4 — tracing, costs, prompts, evals.</strong><br>

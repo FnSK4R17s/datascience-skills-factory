@@ -1,4 +1,8 @@
-<h1 align="center">🔍🏭 qmd-search</h1>
+<p align="center">
+  <img src="logo.png" alt="qmd-search" height="88">
+</p>
+
+<h1 align="center">qmd-search</h1>
 
 <p align="center">
   <strong>Local hybrid search for markdown knowledge bases.</strong><br>

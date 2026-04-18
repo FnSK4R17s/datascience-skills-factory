@@ -1,4 +1,8 @@
-<h1 align="center">🏭🎪 brand-kit</h1>
+<p align="center">
+  <img src="logo.png" alt="brand-kit" height="88">
+</p>
+
+<h1 align="center">brand-kit</h1>
 
 <p align="center">
   <strong>Config-driven logo generation for any emoji-branded ecosystem.</strong><br>
