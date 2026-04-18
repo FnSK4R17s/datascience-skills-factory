@@ -31,7 +31,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [prd-karpathy-style](skills/prd-karpathy-style/) | Generate Karpathy-style PRDs — opinionated idea docs designed to be handed to LLM agents for implementation | `npx skills add FnSK4R17s/datascience-skills-factory --skill prd-karpathy-style` |
 | [auto-format](skills/auto-format/) | Detect project languages, install formatters (ruff, prettier, rustfmt), generate configs, and wire up a PostToolUse hook for automatic formatting on every file write | `npx skills add FnSK4R17s/datascience-skills-factory --skill auto-format` |
 | [qmd-search](skills/qmd-search/) | Install qmd (local hybrid search — BM25 + vectors + LLM reranking), index markdown collections, and optionally wire up MCP server + PostToolUse hook for auto-reindexing | `npx skills add FnSK4R17s/datascience-skills-factory --skill qmd-search` |
-| [factory-branding](skills/factory-branding/) | Generate branded logos for skills using Fluent 3D emoji composition — base mark + suffix, transparent PNGs via Pillow | `npx skills add FnSK4R17s/datascience-skills-factory --skill factory-branding` |
+| [factory-branding](skills/factory-branding/) | Config-driven logo generation using Fluent 3D emoji composition — define base mark + per-skill suffixes in `branding.yml`, interactive bootstrap walks you through brand setup | `npx skills add FnSK4R17s/datascience-skills-factory --skill factory-branding` |
 
 ## Skill Structure
 
@@ -39,16 +39,31 @@ Each skill follows progressive disclosure — minimal context cost, deep referen
 
 ```
 skills/<skill-name>/
-├── SKILL.md          # Decision tree (~100 lines, loaded when skill triggers)
+├── SKILL.md          # Runtime usage guide (loaded when skill triggers)
+├── BOOTSTRAP.md      # One-time setup flow (interactive, run once then delete)
+├── README.md         # Human-facing docs with branded logo header
 ├── references/       # Deep-dive docs (loaded on demand, <300 lines each)
 ├── scripts/          # Executable utilities (run, not loaded into context)
-└── assets/           # Code templates and boilerplate
+└── assets/           # Config templates and boilerplate
 ```
+
+Not every skill needs all files — `SKILL.md` is the only required one.
+`BOOTSTRAP.md` is for skills that have a setup step (installing tools,
+creating config files, wiring up hooks).
+
+## Branding
+
+Every skill README has a branded header — a Fluent 3D emoji `logo.png`
+generated from [`branding.yml`](branding.yml). See the
+[factory-branding](skills/factory-branding/) skill for the full design
+system and generation scripts.
 
 ## Contributing
 
 1. Create `skills/<skill-name>/SKILL.md` with YAML frontmatter (`name`, `description`)
-2. Add `references/` for detailed patterns
-3. Add `scripts/` for executable utilities
-4. Add `assets/` for code templates
-5. PR it
+2. Add `BOOTSTRAP.md` if the skill has a first-time setup flow
+3. Add `references/` for detailed patterns
+4. Add `scripts/` for executable utilities
+5. Add `assets/` for config templates
+6. Add a suffix emoji to `branding.yml` and generate `logo.png`
+7. PR it
