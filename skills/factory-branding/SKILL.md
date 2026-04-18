@@ -91,14 +91,28 @@ base_mark:
 
 This produces ⚓🦞 as the base, with suffixes appended: ⚓🦞🔍
 
+## Interaction Model
+
+> **Default: interactive.** Always ask the user before making brand
+> decisions — emoji choices, names, placements. Do not silently pick
+> emojis or write config without confirmation. The user's taste drives
+> the brand, not defaults.
+>
+> **Exception:** If the user explicitly says "just do it", "non-interactive",
+> "auto", or similar, make reasonable choices and proceed without asking.
+
 ## Decision Tree
 
 ### 1. Locate Config
 
-Look for `branding.yml` at the repo root. If missing:
-- Ask the user if they want to create one
-- Use the schema above as a template
-- Fill in base mark and any existing skills
+Look for `branding.yml` at the repo root.
+
+**If found:** read it, validate (step 2), and proceed to logo generation.
+
+**If missing:** follow BOOTSTRAP.md for first-time setup. This is an
+interactive flow — ask the user about brand name, base mark emoji(s),
+repo-level logo sequence, per-skill suffixes, and where to put
+LOGO_CONVENTIONS.md. Do not create the config silently.
 
 ### 2. Validate Config
 
@@ -106,7 +120,10 @@ Check that:
 - `brand.source` is `fluent-3d` (only supported source)
 - `base_mark` has at least one entry
 - Each skill in `skills:` has a `suffix` array
-- No duplicate suffix emojis across skills
+- Each sub-repo in `subrepos:` has a `suffix` array
+- No duplicate suffix emojis across skills and subrepos
+
+If validation fails, tell the user what's wrong and ask how to fix it.
 
 ### 3. Generate Logos
 
@@ -149,13 +166,24 @@ Heights come from `branding.yml`:
 - Base-only logos: `display.base_only.height`
 - Repo-level: `display.repo_level.height`
 
-### 5. Register New Skills
+### 5. Register New Skills or Sub-Repos
 
-When a new skill is created and needs a logo:
-1. Pick a suffix emoji (single emoji, must exist in Fluent 3D set, no duplicates)
-2. Add entry to `branding.yml` under `skills:`
+When a new skill or sub-repo is created and needs a logo:
+
+**Ask the user:**
+
+> What suffix emoji should represent `<name>`? It should capture the
+> skill's purpose at a glance and be distinct from existing suffixes.
+
+If the user is unsure, suggest 2-3 options based on the skill's
+description and existing patterns in `branding.yml`.
+
+Then:
+1. Add entry to `branding.yml` under `skills:` or `subrepos:`
+2. Update `LOGO_CONVENTIONS.md` suffix table
 3. Run `generate-logo.sh --config branding.yml --skill <name>`
 4. Add the README header
+5. **Show the user the result** before committing
 
 ## Fluent 3D Emoji Source
 
