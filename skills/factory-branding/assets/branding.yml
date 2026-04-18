@@ -63,8 +63,26 @@ repo:
   emojis: ["🏭"]
   output: logo.png
 
-# ── Per-skill / per-sub-repo logos ───────────────────────────────
-# Each key = directory name under skills/ (or sub-repo name).
+# ── Sub-repos ────────────────────────────────────────────────────
+# Sibling repos in the same ecosystem that share the base mark.
+# Each key = repo name. Logo goes at that repo's root as logo.png.
+# Convention: base mark goes FIRST, suffix appended after.
+#
+# subrepos:
+#   myproject-vault:
+#     suffix: ["🏠"]
+#     name: "House"
+#     reason: "Vault = home, where the agent lives"
+#
+#   myproject-api:
+#     suffix: ["🚀"]
+#     name: "Rocket"
+#     reason: "API layer, launches requests"
+
+subrepos: {}
+
+# ── Skills ───────────────────────────────────────────────────────
+# Each key = directory name under skills/.
 # Convention: base mark goes FIRST, suffix appended after.
 #
 # skills:

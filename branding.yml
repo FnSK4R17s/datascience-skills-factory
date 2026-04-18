@@ -33,6 +33,10 @@ repo:
   emojis: ["📊", "🔬", "✨", "🏭"]
   output: logo.png
 
+# Sub-repos — sibling repos sharing the base mark
+# (none for this ecosystem currently)
+subrepos: {}
+
 # Per-skill logos — base mark goes FIRST
 skills:
   auto-format:

@@ -13,25 +13,90 @@ the [factory-branding](https://github.com/FnSK4R17s/datascience-skills-factory/t
 
 <!-- UPDATE: Replace with your base mark emoji(s) and rationale -->
 
-Every logo starts with the same base emoji — the brand signature:
+Every logo starts with the same base emoji(s) — the brand signature:
 
 | Emoji | Name | Role |
 |-------|------|------|
 | 🏭 | Factory | The brand anchor |
 
-### Suffix Table
+### Sub-Repo Suffix Table
 
-<!-- UPDATE: Add a row for each skill or sub-repo -->
+<!-- UPDATE: Add a row for each sub-repo in the ecosystem -->
 
-Each skill/sub-repo appends a suffix emoji that represents its purpose:
+Each sub-repo appends a suffix emoji that represents its purpose:
 
-| Name | Suffix | Full Mark | Reasoning |
+| Repo | Suffix | Full Mark | Reasoning |
 |------|--------|-----------|-----------|
 | **core** | _(none)_ | 🏭 | Core — no suffix needed |
 
+### Skill Suffix Table
+
+<!-- UPDATE: Add a row for each skill -->
+
+Each skill appends a suffix emoji that represents its purpose:
+
+| Skill | Suffix | Full Mark | Reasoning |
+|-------|--------|-----------|-----------|
+| _(no skills yet)_ | — | — | — |
+
+---
+
+## Examples
+
+### Single-Emoji Base Mark
+
+A project using 🏭 as its sole base mark:
+
+```yaml
+# branding.yml
+base_mark:
+  - emoji: "🏭"
+    name: Factory
+    role: "The brand anchor"
+```
+
+Produces these logos:
+
+| Target | Emoji Sequence | Logo |
+|--------|---------------|------|
+| Core repo | 📊🔬✨🏭 | Factory leads from the right |
+| search skill | 🏭🔍 | Base first, suffix after |
+| tracing skill | 🏭📡 | Base first, suffix after |
+| vault sub-repo | 🏭🏠 | Base first, suffix after |
+
+### Multi-Emoji Base Mark
+
+A project using ⚓🦞 (two emojis) as its base mark:
+
+```yaml
+# branding.yml
+base_mark:
+  - emoji: "⚓"
+    name: Anchor
+    role: "Stability, control, anchored to the vault"
+  - emoji: "🦞"
+    name: Lobster
+    role: "The Claw — core brand identity"
+```
+
+Produces these logos:
+
+| Target | Emoji Sequence | Logo |
+|--------|---------------|------|
+| Core repo | ⚓🦞 | Base mark only, no suffix |
+| vault sub-repo | ⚓🦞🏠 | Both base emojis + suffix |
+| mcp sub-repo | ⚓🦞🔐 | Both base emojis + suffix |
+| skills sub-repo | ⚓🦞💪 | Both base emojis + suffix |
+| observe sub-repo | ⚓🦞🔭 | Both base emojis + suffix |
+
+The base mark always stays together as a unit — suffixes append after
+the full base, never split it.
+
+---
+
 ## How to Generate
 
-1. **Define** the emoji in `branding.yml` under `skills:` or `repo:`
+1. **Define** the emoji in `branding.yml` under `skills:`, `subrepos:`, or `repo:`
 2. **Run** the generation script:
 
 ```bash
@@ -55,7 +120,7 @@ Each skill/sub-repo appends a suffix emoji that represents its purpose:
 - **Font**: [Microsoft Fluent Emoji 3D](https://github.com/microsoft/fluentui-emoji)
 - **Method**: Individual emoji PNGs composited side-by-side at equal height via Pillow
 - **Background**: Transparent PNG (RGBA)
-- **Output**: `logo.png` at skill or repo root
+- **Output**: `logo.png` at skill, sub-repo, or repo root
 
 ### Display Sizes
 
@@ -68,7 +133,7 @@ Each skill/sub-repo appends a suffix emoji that represents its purpose:
 ### README Usage
 
 ```html
-<!-- Skill / sub-repo -->
+<!-- Skill or sub-repo -->
 <p align="center">
   <img src="logo.png" alt="Skill Name" height="88">
 </p>
@@ -93,7 +158,8 @@ Each skill/sub-repo appends a suffix emoji that represents its purpose:
 ## Rules
 
 - **Always include the base mark** — it's the brand anchor
-- **One suffix emoji per skill** (two max for repo-level logos)
+- **Base mark is atomic** — never split a multi-emoji base mark
+- **One suffix emoji per skill/sub-repo** (two max for repo-level logos)
 - **Use Fluent 3D style only** — no Twemoji, no Apple emoji, no flat icons
 - **Transparent background** — works on light and dark GitHub themes
 - **No text in the logo** — the name goes in the `<h1>` below it
@@ -102,10 +168,10 @@ Each skill/sub-repo appends a suffix emoji that represents its purpose:
 ## Adding a New Entry
 
 1. Pick a suffix emoji that:
-   - Represents the skill's function at a glance
-   - Is distinct from existing suffixes
+   - Represents the skill/sub-repo's function at a glance
+   - Is distinct from all existing suffixes (across both skills and sub-repos)
    - Exists in the [Fluent 3D emoji set](https://github.com/microsoft/fluentui-emoji/tree/main/assets)
-2. Add it to `branding.yml` under `skills:`
-3. Add a row to the suffix table above
+2. Add it to `branding.yml` under `skills:` or `subrepos:`
+3. Add a row to the appropriate suffix table above
 4. Generate the logo
 5. Add the README header
