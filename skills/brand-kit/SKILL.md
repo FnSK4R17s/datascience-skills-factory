@@ -1,5 +1,5 @@
 ---
-name: factory-branding
+name: brand-kit
 description: >
   Generate branded logos and README headers using a config-driven Fluent 3D
   emoji composition system. Reads branding.yml from the repo root to determine

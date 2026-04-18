@@ -99,7 +99,7 @@ adjust if anything looks off.
 ./scripts/generate-logo.sh --config branding.yml --all
 ```
 
-First run downloads Fluent 3D emoji PNGs to `~/.cache/factory-branding/fluent-emoji/`.
+First run downloads Fluent 3D emoji PNGs to `~/.cache/brand-kit/fluent-emoji/`.
 
 ### 9. Add README Headers
 

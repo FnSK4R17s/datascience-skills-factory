@@ -1,4 +1,4 @@
-<h1 align="center">🏭🎪 factory-branding</h1>
+<h1 align="center">🏭🎪 brand-kit</h1>
 
 <p align="center">
   <strong>Config-driven logo generation for any emoji-branded ecosystem.</strong><br>
@@ -44,7 +44,7 @@ itself is ecosystem-agnostic.
 ## File Structure
 
 ```
-factory-branding/
+brand-kit/
 ├── SKILL.md                          # Runtime usage — schema, decision tree, rules
 ├── BOOTSTRAP.md                      # First-time setup — create config, generate logos
 ├── README.md                         # This file

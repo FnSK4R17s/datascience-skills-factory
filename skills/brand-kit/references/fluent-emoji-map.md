@@ -17,7 +17,7 @@ Source: https://github.com/microsoft/fluentui-emoji/tree/main/assets
 | 📡 | U+1F4E1 | Satellite antenna | langfuse-tracing |
 | 📋 | U+1F4CB | Clipboard | prd-karpathy-style |
 | 🔍 | U+1F50D | Magnifying glass tilted left | qmd-search |
-| 🎪 | U+1F3AA | Circus tent | factory-branding |
+| 🎪 | U+1F3AA | Circus tent | brand-kit |
 
 ## Good Candidates for Future Skills
 

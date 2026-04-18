@@ -1,5 +1,5 @@
 # branding.yml — Logo definitions for the Data Science Skills Factory ecosystem
-# Read by the factory-branding skill to generate logo.png files.
+# Read by the brand-kit skill to generate logo.png files.
 
 # Brand identity
 brand:
@@ -59,7 +59,7 @@ skills:
     name: Magnifying glass
     reason: "Search, discovery, retrieval"
 
-  factory-branding:
+  brand-kit:
     suffix: ["🎪"]
     name: Circus tent
     reason: "The showroom, presentation, branding"

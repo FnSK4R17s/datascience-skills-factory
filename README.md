@@ -31,7 +31,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [prd-karpathy-style](skills/prd-karpathy-style/) | Generate Karpathy-style PRDs — opinionated idea docs designed to be handed to LLM agents for implementation | `npx skills add FnSK4R17s/datascience-skills-factory --skill prd-karpathy-style` |
 | [auto-format](skills/auto-format/) | Detect project languages, install formatters (ruff, prettier, rustfmt), generate configs, and wire up a PostToolUse hook for automatic formatting on every file write | `npx skills add FnSK4R17s/datascience-skills-factory --skill auto-format` |
 | [qmd-search](skills/qmd-search/) | Install qmd (local hybrid search — BM25 + vectors + LLM reranking), index markdown collections, and optionally wire up MCP server + PostToolUse hook for auto-reindexing | `npx skills add FnSK4R17s/datascience-skills-factory --skill qmd-search` |
-| [factory-branding](skills/factory-branding/) | Config-driven logo generation using Fluent 3D emoji composition — define base mark + per-skill suffixes in `branding.yml`, interactive bootstrap walks you through brand setup | `npx skills add FnSK4R17s/datascience-skills-factory --skill factory-branding` |
+| [brand-kit](skills/brand-kit/) | Config-driven logo generation using Fluent 3D emoji composition — define base mark + per-skill suffixes in `branding.yml`, interactive bootstrap walks you through brand setup | `npx skills add FnSK4R17s/datascience-skills-factory --skill brand-kit` |
 
 ## Skill Structure
 
@@ -55,7 +55,7 @@ creating config files, wiring up hooks).
 
 Every skill README has a branded header — a Fluent 3D emoji `logo.png`
 generated from [`branding.yml`](branding.yml). See the
-[factory-branding](skills/factory-branding/) skill for the full design
+[brand-kit](skills/brand-kit/) skill for the full design
 system and generation scripts.
 
 ## Contributing

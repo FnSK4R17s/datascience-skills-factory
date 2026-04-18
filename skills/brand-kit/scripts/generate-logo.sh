@@ -11,7 +11,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CACHE_DIR="${HOME}/.cache/factory-branding/fluent-emoji"
+CACHE_DIR="${HOME}/.cache/brand-kit/fluent-emoji"
 COMPOSE_SCRIPT="$SCRIPT_DIR/compose_logo.py"
 
 CONFIG=""

@@ -1,10 +1,10 @@
 # branding.yml — Logo definitions for your ecosystem
 #
 # This file is the single source of truth for all logo generation.
-# Place it at your repo root. The factory-branding skill reads it to
+# Place it at your repo root. The brand-kit skill reads it to
 # composite Fluent 3D emoji PNGs into transparent logo.png files.
 #
-# Docs: https://github.com/FnSK4R17s/datascience-skills-factory/tree/main/skills/factory-branding
+# Docs: https://github.com/FnSK4R17s/datascience-skills-factory/tree/main/skills/brand-kit
 
 # ── Brand identity ───────────────────────────────────────────────
 
