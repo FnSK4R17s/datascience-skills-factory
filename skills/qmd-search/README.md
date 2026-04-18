@@ -1,4 +1,11 @@
-# qmd-search
+<h1 align="center">🔍🏭 qmd-search</h1>
+
+<p align="center">
+  <strong>Local hybrid search for markdown knowledge bases.</strong><br>
+  <sub>Part of <a href="../../">Data Science Skills Factory</a></sub>
+</p>
+
+---
 
 Install [qmd](https://github.com/tobi/qmd) — a local hybrid search engine — and
 index markdown knowledge bases for fast agent-accessible search.

@@ -1,4 +1,11 @@
-# auto-format
+<h1 align="center">🎨🏭 auto-format</h1>
+
+<p align="center">
+  <strong>Automatic code formatting on every file write.</strong><br>
+  <sub>Part of <a href="../../">Data Science Skills Factory</a></sub>
+</p>
+
+---
 
 Detect project languages, install formatters, and wire up automatic formatting so every file Claude writes is formatted on save — no prompting required.
 
