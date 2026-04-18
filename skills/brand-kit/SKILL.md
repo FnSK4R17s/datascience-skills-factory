@@ -11,7 +11,7 @@ description: >
   "brand", "README header", "branding.yml".
 ---
 
-# Factory Branding Skill
+# Brand Kit Skill
 
 Generate logos and branded README headers for any ecosystem that provides a
 `branding.yml` config file.
