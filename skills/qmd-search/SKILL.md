@@ -109,6 +109,23 @@ Force full rebuild (rarely needed):
 qmd embed -f
 ```
 
+### Keeping Git-Backed Collections Fresh
+
+If a collection is a git repo, attach a pull command so `qmd update --pull`
+pulls + reindexes in one step:
+
+```bash
+qmd collection update-cmd <name> 'git -C <repo-path> stash && git -C <repo-path> pull --rebase --ff-only && git -C <repo-path> stash pop || true'
+```
+
+After setup:
+
+```bash
+qmd update --pull && qmd embed   # pull latest, then reindex
+```
+
+The `|| true` keeps `stash pop` from failing when there's nothing to pop.
+
 ## Collection Management
 
 ```bash
