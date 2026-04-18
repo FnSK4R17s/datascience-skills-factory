@@ -45,9 +45,9 @@ skills:
     reason: "Styling, formatting, beautification"
 
   langfuse-tracing:
-    suffix: ["📡"]
-    name: Satellite antenna
-    reason: "Signals, telemetry, observability"
+    suffix: ["🪢"]
+    name: Knot
+    reason: "Traces, threads, connected spans"
 
   prd-karpathy-style:
     suffix: ["📋"]

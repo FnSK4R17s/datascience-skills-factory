@@ -59,6 +59,7 @@ declare -A EMOJI_FOLDERS=(
   ["🔬"]="Microscope"
   ["✨"]="Sparkles"
   ["🎪"]="Circus tent"
+  ["🪢"]="Knot"
   ["⚓"]="Anchor"
   ["🦞"]="Lobster"
   ["🏠"]="House"
