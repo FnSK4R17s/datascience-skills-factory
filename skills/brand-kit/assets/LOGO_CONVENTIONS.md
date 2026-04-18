@@ -37,7 +37,12 @@ Each skill appends a suffix emoji that represents its purpose:
 
 | Skill | Suffix | Full Mark | Reasoning |
 |-------|--------|-----------|-----------|
-| _(no skills yet)_ | — | — | — |
+| **auto-format** | 🎨 | 🏭🎨 | Styling, formatting, beautification |
+| **langfuse-tracing** | 🪢 | 🏭🪢 | Traces, threads, connected spans |
+| **prd-karpathy-style** | 📋 | 🏭📋 | Specs, documents, planning |
+| **qmd-search** | 🔍 | 🏭🔍 | Search, discovery, retrieval |
+| **brand-kit** | 🎪 | 🏭🎪 | The showroom, presentation, branding |
+| **plan-feature** | 🗺️ | 🏭🗺️ | Scope feature territory, staged traversal |
 
 ---
 

@@ -63,3 +63,8 @@ skills:
     suffix: ["🎪"]
     name: Circus tent
     reason: "The showroom, presentation, branding"
+
+  plan-feature:
+    suffix: ["🗺️"]
+    name: Map
+    reason: "Scope feature territory, staged traversal, you-are-here"

@@ -1,0 +1,30 @@
+# plan-feature configuration
+# Edit per repo. SKILL.md reads this on every invocation.
+
+search:
+  # Enable qmd semantic search in Stage 1 (Research). Broad — useful for
+  # finding related wiki/docs content. Set false if noise outweighs signal.
+  qmd_stage1: true
+
+  # Enable qmd in Stage 3 (Deep Research). Usually worth keeping on — deep
+  # research is where semantic recall earns its keep.
+  qmd_stage3: true
+
+  # qmd collection name. Use "auto" to let the skill pick the first
+  # registered collection, or set an explicit name like "my-repo-wiki".
+  qmd_collection: auto
+
+  # Allow WebFetch during Stage 3 for library docs, RFCs, external APIs.
+  web_fetch_stage3: true
+
+  # Enable codebase Grep/Glob/Read scans. Almost always true — turn off
+  # only for non-code repos (pure docs, pure notes).
+  codebase_search: true
+
+format:
+  # Case convention for feature slugs. Currently only "kebab" supported.
+  slug_case: kebab
+
+  # Status column in PLAN.md. "freeform" accepts any string
+  # (draft, v1 done, v2 done, archived). "enum" restricts to a fixed set.
+  status: freeform
