@@ -52,7 +52,8 @@ Or invoke directly if loaded:
 
 ```
 qmd-search/
-├── SKILL.md                    # Skill entry point (decision tree for Claude)
+├── SKILL.md                    # Runtime usage guide — search commands, output, tips
+├── BOOTSTRAP.md                # One-time setup — install, detect, index, MCP, hooks
 ├── README.md                   # This file
 ├── scripts/
 │   ├── install-qmd.sh          # Installs qmd globally

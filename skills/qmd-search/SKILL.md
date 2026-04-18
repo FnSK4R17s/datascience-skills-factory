@@ -1,191 +1,141 @@
 ---
 name: qmd-search
 description: >
-  Install and configure qmd (local hybrid search engine) for markdown knowledge
-  bases. Detects collections, installs qmd, indexes documents, and optionally
-  registers an MCP server for agent-accessible search. Use when setting up search
-  for a wiki or docs repo, when search is slow across many markdown files, when
-  the user mentions "qmd", "semantic search", "index my docs", or "search my wiki".
-  Triggers on: "qmd", "index wiki", "search wiki", "semantic search",
-  "install qmd", "wiki search", "knowledge base search".
+  Search markdown knowledge bases using qmd — a local hybrid search engine
+  combining BM25 keywords, vector similarity, and LLM reranking. Use when
+  searching a wiki or docs repo, when glob/grep is too slow or imprecise across
+  many markdown files, or when the user mentions "qmd", "semantic search",
+  "search my wiki", or "knowledge base search".
+  Triggers on: "qmd", "search wiki", "semantic search", "wiki search",
+  "knowledge base search", "find in wiki", "query wiki".
+  For first-time setup, see BOOTSTRAP.md.
 ---
 
 # qmd-search Skill
 
-Install qmd, index markdown collections, and optionally wire up the MCP server
-so agents can search without globbing/grepping hundreds of files.
+Search markdown knowledge bases with qmd. Three search modes, all local,
+no cloud services.
 
-## Decision Tree
+## When to Use qmd vs. Grep/Glob
 
-### 1. Check Prerequisites
+| Situation | Use |
+|-----------|-----|
+| Know the exact filename or path | Glob / Read |
+| Know an exact string or symbol | Grep |
+| Natural language question across many files | `qmd query` |
+| Fuzzy/semantic "find pages about X" | `qmd vsearch` |
+| Keyword search with ranking | `qmd search` |
+| Need to retrieve a known doc by path | `qmd get` |
 
-Verify Node.js >= 22 or Bun >= 1.0.0 is available:
+**Rule of thumb:** if you'd need 3+ grep passes to find what you want,
+use `qmd query` instead.
 
-```bash
-node --version   # must be >= 22
-bun --version    # alternative: >= 1.0.0
-```
+## Search Commands
 
-If neither is available, stop and tell the user.
+### Keyword Search (BM25)
 
-### 2. Install qmd
-
-Check if qmd is already installed:
-
-```bash
-qmd --version
-```
-
-If missing, run `scripts/install-qmd.sh`. The script installs globally via
-npm or bun depending on what's available.
-
-### 3. Detect Collections
-
-Scan the working directory and any additional working directories for markdown
-knowledge bases. A collection candidate is any directory containing 10+ `.md`
-files (excluding `node_modules`, `.git`, `.obsidian`).
-
-Common patterns:
-| Directory pattern       | Likely collection name |
-|------------------------|----------------------|
-| `wiki/`                | `<repo-name>-wiki`  |
-| `docs/`                | `<repo-name>-docs`  |
-| `notes/`               | `<repo-name>-notes` |
-| `raw/`                 | `<repo-name>-raw`   |
-| Root with many `.md`   | `<repo-name>`       |
-
-Present detected collections to the user and ask which to index.
-
-### 4. Register Collections
-
-For each confirmed collection:
+Fast, exact. Best when you know the terminology:
 
 ```bash
-qmd collection add <path> --name <collection-name>
+qmd search "Kot massacre political fallout"
+qmd search "graph traversal algorithm" -n 5
 ```
 
-### 5. Add Context (Optional)
+### Semantic Search (Vector)
 
-If the collection has a README, CLAUDE.md, or similar overview file, register
-it as context so qmd understands the collection's purpose:
+Finds conceptually related content even without keyword overlap:
 
 ```bash
-qmd context add qmd://<collection-name> "<one-line description>"
+qmd vsearch "how did Nepal transition from monarchy to democracy"
+qmd vsearch "advantages of planar graphs" -n 10
 ```
 
-### 6. Build Index
+### Hybrid Search (Best Quality)
 
-Run the embedding pipeline. This downloads models (~2GB) on first run:
+Combines BM25 + vectors + LLM reranking. Use for complex questions:
 
 ```bash
-qmd embed
+qmd query "what role did the Rana dynasty play in modernizing Nepal"
+qmd query "compare BFS and DFS for external memory" --min-score 0.3
 ```
 
-For large collections (500+ files), warn the user this may take a few minutes.
+### Document Retrieval
 
-To force a full re-index:
+Fetch specific documents without searching:
+
+```bash
+qmd get "wiki/entities/jung-bahadur-rana.md"
+qmd get "#abc123"                              # by document ID
+qmd multi-get "wiki/concepts/*.md"             # batch by glob
+```
+
+## Output Formats
+
+Default output is human-readable. For programmatic use:
+
+```bash
+qmd query "question" --json        # structured JSON
+qmd query "question" --csv         # CSV with scores
+qmd query "question" --md          # markdown table
+qmd query "question" --files       # file paths + scores only
+qmd query "question" --full        # include full document content
+qmd query "question" --explain     # include scoring breakdown
+```
+
+## Score Interpretation
+
+| Score | Meaning |
+|-------|---------|
+| 0.8 - 1.0 | Highly relevant — direct answer likely in this document |
+| 0.5 - 0.8 | Moderately relevant — related content, may need synthesis |
+| 0.2 - 0.5 | Somewhat relevant — tangential or partial overlap |
+| < 0.2 | Low relevance — likely noise, skip unless desperate |
+
+Use `--min-score 0.3` to filter noise on broad queries.
+
+## Index Management
+
+If you've added or changed files and search results seem stale:
+
+```bash
+qmd update                  # re-scan collections for new/changed files
+qmd embed                   # regenerate embeddings for changed docs
+qmd status                  # check collection stats and index health
+```
+
+Force full rebuild (rarely needed):
 
 ```bash
 qmd embed -f
 ```
 
-### 7. Verify
-
-Run a test search against indexed content:
+## Collection Management
 
 ```bash
-qmd search "test query relevant to collection" --json
+qmd collection list                              # show indexed collections
+qmd collection add <path> --name <name>          # add new collection
+qmd collection remove <name>                     # remove collection
+qmd context add qmd://<name> "description"       # add collection context
 ```
 
-Confirm results are returned and scores look reasonable. Report the collection
-stats (document count, chunk count) via:
+## MCP Tools (if MCP server is configured)
 
-```bash
-qmd status
-```
+When qmd runs as an MCP server, these tools are available:
 
-### 8. MCP Server Setup (Optional)
+- **`query`** — hybrid search (same as `qmd query`)
+- **`get`** — retrieve single document by path or ID
+- **`multi_get`** — batch retrieve by glob pattern
+- **`status`** — collection stats and index health
 
-Ask the user if they want MCP integration for agent access. If yes:
+## Tips
 
-**For Claude Code** — add to `.claude/settings.json` (project-level) or
-`~/.claude/settings.json` (global):
-
-```json
-{
-  "mcpServers": {
-    "qmd": {
-      "command": "qmd",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-**For daemon mode** (persistent, shared across sessions):
-
-```bash
-qmd mcp --http --daemon
-```
-
-This exposes tools: `query`, `get`, `multi_get`, `status`.
-
-### 9. Update Hook (Optional)
-
-If the collection is actively edited (e.g., a wiki that grows during sessions),
-offer to set up an update hook so new/changed files are re-indexed:
-
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_SKILL_DIR}/scripts/update-index.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-If other PostToolUse hooks exist, merge — do not replace.
-
-## Search Reference
-
-Once installed, agents can search with:
-
-```bash
-# Keyword search (BM25)
-qmd search "query terms"
-
-# Semantic search (vector similarity)
-qmd vsearch "natural language question"
-
-# Hybrid search (BM25 + vectors + LLM reranking) — best quality
-qmd query "complex question about the knowledge base"
-
-# Retrieve specific document
-qmd get "wiki/entities/some-entity.md"
-
-# Batch retrieve by glob
-qmd multi-get "wiki/concepts/*.md"
-```
-
-**Output flags:** `--json`, `--csv`, `--md`, `--xml`, `--files`, `--full`, `--explain`
-
-**Score interpretation:**
-- 0.8-1.0: Highly relevant
-- 0.5-0.8: Moderately relevant
-- 0.2-0.5: Somewhat relevant
-- < 0.2: Low relevance
+- Prefer `qmd query` over `qmd search` when the question is natural language
+- Use `--full` when you need document content inline (saves a Read call)
+- Use `--explain` to debug why a result ranked high or low
+- Chain with `qmd get` to fetch the top result's full content after a search
+- For wiki ingests, run `qmd update && qmd embed` after adding new source pages
 
 ## Additional Resources
 
-- `references/qmd-config.md` — detailed configuration and tuning options
-- `scripts/install-qmd.sh` — installs qmd globally
-- `scripts/update-index.sh` — incremental re-index hook for PostToolUse
+- `references/qmd-config.md` — models, chunking, scoring pipeline, tuning
+- `BOOTSTRAP.md` — first-time setup instructions
