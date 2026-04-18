@@ -53,7 +53,5 @@ target repo — not the template in this skill.
 
 - `prd-karpathy-style` — whole-product PRDs. Use when the scope is a new
   product, not a feature in an existing codebase.
-- `bugfix` — bug investigations. Use when the goal is fixing broken
-  behavior, not adding new behavior.
 - `qmd-search` — the semantic search backend used by Stages 1 and 3 when
   enabled in `.planconfig`.
