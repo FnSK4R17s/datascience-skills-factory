@@ -1,0 +1,81 @@
+# branding.yml — Logo definitions for your ecosystem
+#
+# This file is the single source of truth for all logo generation.
+# Place it at your repo root. The factory-branding skill reads it to
+# composite Fluent 3D emoji PNGs into transparent logo.png files.
+#
+# Docs: https://github.com/FnSK4R17s/datascience-skills-factory/tree/main/skills/factory-branding
+
+# ── Brand identity ───────────────────────────────────────────────
+
+brand:
+  name: "Your Project Name"
+  tagline: "One-line description of your project."
+  source: fluent-3d  # Microsoft Fluent Emoji 3D (only supported source)
+
+# ── Base mark ────────────────────────────────────────────────────
+# Appears in every logo. One or more emojis that form your brand signature.
+#
+# Single emoji:
+#   base_mark:
+#     - emoji: "🏭"
+#       name: Factory
+#       role: "The brand anchor"
+#
+# Multi-emoji (e.g. CommandClaw uses ⚓🦞):
+#   base_mark:
+#     - emoji: "⚓"
+#       name: Anchor
+#       role: "Stability, control"
+#     - emoji: "🦞"
+#       name: Lobster
+#       role: "Core identity"
+
+base_mark:
+  - emoji: "🏭"
+    name: Factory
+    role: "The brand anchor — built in the factory"
+
+# ── Display sizes ────────────────────────────────────────────────
+# Height attribute for <img> tags in READMEs.
+# Larger emoji counts need slightly smaller display to stay balanced.
+
+display:
+  base_only:
+    height: 97       # logos with just the base mark
+  with_suffix:
+    height: 88       # base + 1-2 suffix emojis (most common)
+  repo_level:
+    height: 97       # repo-level logo (may have more emojis)
+
+# ── Generation defaults ─────────────────────────────────────────
+
+defaults:
+  pixel_height: 168  # actual PNG pixel height before README scaling
+  gap: 8             # pixels between composited emojis
+  background: transparent
+
+# ── Repo-level logo ──────────────────────────────────────────────
+# The logo for the root README. Specify the full emoji sequence.
+# Convention: base mark goes LAST for repo logos (suffix leads).
+
+repo:
+  emojis: ["🏭"]
+  output: logo.png
+
+# ── Per-skill / per-sub-repo logos ───────────────────────────────
+# Each key = directory name under skills/ (or sub-repo name).
+# Convention: base mark goes FIRST, suffix appended after.
+#
+# skills:
+#   my-skill:
+#     suffix: ["🔍"]              # one emoji (recommended)
+#     name: "Magnifying glass"    # human-readable name
+#     reason: "Search, discovery" # why this emoji fits
+#
+#   another-skill:
+#     suffix: ["📡"]
+#     name: "Satellite antenna"
+#     reason: "Telemetry, observability"
+
+skills: {}
