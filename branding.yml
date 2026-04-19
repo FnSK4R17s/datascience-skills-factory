@@ -68,3 +68,8 @@ skills:
     suffix: ["🗺️"]
     name: Map
     reason: "Scope feature territory, staged traversal, you-are-here"
+
+  repo-best-practices:
+    suffix: ["🧭"]
+    name: Compass
+    reason: "Repo conventions, guardrails, agent navigation"
