@@ -43,6 +43,7 @@ Each skill appends a suffix emoji that represents its purpose:
 | **qmd-search** | 🔍 | 🏭🔍 | Search, discovery, retrieval |
 | **brand-kit** | 🎪 | 🏭🎪 | The showroom, presentation, branding |
 | **plan-feature** | 🗺️ | 🏭🗺️ | Scope feature territory, staged traversal |
+| **repo-best-practices** | 🧭 | 🏭🧭 | Repo conventions, guardrails, agent navigation |
 
 ---
 

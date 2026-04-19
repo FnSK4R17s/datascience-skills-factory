@@ -83,6 +83,7 @@ declare -A EMOJI_FOLDERS=(
   ["🔄"]="Counterclockwise arrows button"
   ["🏗️"]="Building construction"
   ["🗺️"]="World map"
+  ["🧭"]="Compass"
 )
 
 # ── YAML parsing via Python (avoids yq dependency) ───────────────
