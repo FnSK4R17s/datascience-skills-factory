@@ -73,3 +73,8 @@ skills:
     suffix: ["🧭"]
     name: Compass
     reason: "Repo conventions, guardrails, agent navigation"
+
+  tdd:
+    suffix: ["🚦"]
+    name: Vertical traffic light
+    reason: "Red-Green-Refactor cycle"

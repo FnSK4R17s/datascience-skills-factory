@@ -34,6 +34,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [brand-kit](skills/brand-kit/) | Config-driven logo generation using Fluent 3D emoji composition — define base mark + per-skill suffixes in `branding.yml`, interactive bootstrap walks you through brand setup | `npx skills add FnSK4R17s/datascience-skills-factory --skill brand-kit` |
 | [plan-feature](skills/plan-feature/) | Walk through Research → Requirements → Deep Research → Backlog Item stages, producing a single agent-ready, Karpathy-style backlog doc per feature under `plan/<slug>/` | `npx skills add FnSK4R17s/datascience-skills-factory --skill plan-feature` |
 | [repo-best-practices](skills/repo-best-practices/) | Bootstrap `CLAUDE.md` (symlinked to `AGENTS.md`) and `ANTIPATTERNS.md`, log user corrections as structured anti-patterns, and surface repeated tasks as skill + subagent extraction candidates | `npx skills add FnSK4R17s/datascience-skills-factory --skill repo-best-practices` |
+| [tdd](skills/tdd/) | Red-green-refactor TDD discipline as a context injection — adapted from mattpocock/skills/tdd. Soft skill, no enforcement, no state | `npx skills add FnSK4R17s/datascience-skills-factory --skill tdd` |
 
 ## Skill Structure
 
@@ -69,3 +70,13 @@ system and generation scripts.
 5. Add `assets/` for config templates
 6. Add a suffix emoji to `branding.yml` and generate `logo.png`
 7. PR it
+
+## References & inspiration
+
+Skills we've learned from, adapted, or directly built on top of. Credit where credit is due.
+
+| Source | What we took | Where it lives |
+|--------|--------------|----------------|
+| [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) | The whole `tdd` skill — adapted verbatim. Soft-skill discipline reminder, anti-horizontal-slice framing, deep-modules and interface-design references | [skills/tdd/](skills/tdd/) |
+
+Found a skill we should learn from? Open a PR adding the row.
