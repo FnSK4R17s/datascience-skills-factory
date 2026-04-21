@@ -64,9 +64,16 @@ repo:
   output: logo.png
 
 # ── Sub-repos ────────────────────────────────────────────────────
-# Sibling repos in the same ecosystem that share the base mark.
-# Each key = repo name. Logo goes at that repo's root as logo.png.
+# Repos nested INSIDE this repo that share the base mark (e.g. git
+# submodules or folders at the repo root that are themselves repos).
+# Each key = directory name under `subrepos_base_path`.
 # Convention: base mark goes FIRST, suffix appended after.
+#
+# Output path: <subrepos_base_path>/<key>/logo.png
+# Override for a single entry with `path:` (relative to this branding.yml,
+# or absolute).
+#
+# subrepos_base_path: "."        # default: this repo's root
 #
 # subrepos:
 #   myproject-vault:
@@ -78,8 +85,38 @@ repo:
 #     suffix: ["🚀"]
 #     name: "Rocket"
 #     reason: "API layer, launches requests"
+#     path: "services/api"       # optional override
 
+subrepos_base_path: "."
 subrepos: {}
+
+# ── Sibling repos ────────────────────────────────────────────────
+# Repos that live OUTSIDE this repo, adjacent on disk (e.g.
+# /apps/myproject-vault next to /apps/myproject). They share the
+# base mark but are not children of this repo.
+# Each key = sibling repo directory name under `siblings_base_path`.
+# Convention: base mark goes FIRST, suffix appended after.
+#
+# Output path: <siblings_base_path>/<key>/logo.png
+# Override for a single entry with `path:` (relative to this branding.yml,
+# or absolute).
+#
+# siblings_base_path: ".."       # default: parent directory (typical workspace layout)
+#
+# siblings:
+#   myproject-vault:
+#     suffix: ["🏠"]
+#     name: "House"
+#     reason: "Vault = home"
+#
+#   myproject-observe:
+#     suffix: ["🔭"]
+#     name: "Telescope"
+#     reason: "Observability"
+#     path: "/opt/other-location" # optional override (absolute or relative)
+
+siblings_base_path: ".."
+siblings: {}
 
 # ── Skills ───────────────────────────────────────────────────────
 # Each key = directory name under skills/.

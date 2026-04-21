@@ -61,17 +61,50 @@ repo:
   emojis: ["📊", "🔬", "✨", "🏭"]   # full emoji sequence
   output: logo.png                     # path relative to repo root
 
-# Per-skill (or per-sub-repo) logos
+# Per-skill logos — directories under skills/
 skills:                                # key = directory name under skills/
   my-skill:
     suffix: ["🔍"]                     # appended after base_mark
     name: "Magnifying glass"
     reason: "Search, discovery"
+
+# Sub-repos — repos nested INSIDE this repo (e.g. submodules)
+# Output: <subrepos_base_path>/<key>/logo.png
+subrepos_base_path: "."                # default: this repo's root
+subrepos:
+  myproject-api:
+    suffix: ["🚀"]
+    name: "Rocket"
+    reason: "API layer, launches requests"
+    # path: "services/api"             # optional per-entry override
+
+# Sibling repos — repos OUTSIDE this repo, adjacent on disk
+# (e.g. /apps/myproject-vault next to /apps/myproject)
+# Output: <siblings_base_path>/<key>/logo.png
+siblings_base_path: ".."               # default: parent directory
+siblings:
+  myproject-vault:
+    suffix: ["🏠"]
+    name: "House"
+    reason: "Vault = home"
+    # path: "/absolute/or/relative/path"  # optional per-entry override
 ```
+
+### Scope Semantics
+
+| Scope       | Lives                          | Default base path | Typical path key |
+|-------------|--------------------------------|-------------------|------------------|
+| `skills`    | Inside `skills/` of this repo  | `skills/`         | key = dirname    |
+| `subrepos`  | Nested inside this repo        | `.`               | key = dirname    |
+| `siblings`  | Adjacent on disk, other repo   | `..`              | key = dirname    |
+
+Per-entry `path:` overrides the computed path. Absolute paths are
+honored as-is; relative paths resolve against the branding.yml's
+repo root (not against the base path).
 
 ### Emoji Ordering Convention
 
-- **Skill logos**: base mark goes **first**, suffix appended after
+- **Skill / subrepo / sibling logos**: base mark goes **first**, suffix appended after
 - **Repo-level logo**: base mark goes **last** (suffix emojis lead)
 - This is configurable — `repo.emojis` is the literal sequence used
 
@@ -121,26 +154,36 @@ Check that:
 - `base_mark` has at least one entry
 - Each skill in `skills:` has a `suffix` array
 - Each sub-repo in `subrepos:` has a `suffix` array
-- No duplicate suffix emojis across skills and subrepos
+- Each sibling in `siblings:` has a `suffix` array
+- No duplicate suffix emojis across skills, subrepos, and siblings
+- For every sibling entry, the resolved target directory exists on disk
+  (warn but still generate — the script creates it if missing)
 
 If validation fails, tell the user what's wrong and ask how to fix it.
 
 ### 3. Generate Logos
 
-For a specific skill:
+Single target:
 ```bash
-./scripts/generate-logo.sh --config ../../branding.yml --skill <skill-name>
+./scripts/generate-logo.sh --config <path>/branding.yml --skill    <skill-name>
+./scripts/generate-logo.sh --config <path>/branding.yml --subrepo  <subrepo-name>
+./scripts/generate-logo.sh --config <path>/branding.yml --sibling  <sibling-name>
 ```
 
-For all skills missing a logo:
+Batch:
 ```bash
-./scripts/generate-logo.sh --config ../../branding.yml --all
+./scripts/generate-logo.sh --config <path>/branding.yml --all             # all skills
+./scripts/generate-logo.sh --config <path>/branding.yml --all-subrepos    # all subrepos
+./scripts/generate-logo.sh --config <path>/branding.yml --all-siblings    # all siblings
+./scripts/generate-logo.sh --config <path>/branding.yml --everything      # skills + subrepos + siblings
 ```
 
-For the repo-level logo:
+Repo-level logo (the one defined by `repo.emojis`):
 ```bash
-./scripts/generate-logo.sh --config ../../branding.yml --repo
+./scripts/generate-logo.sh --config <path>/branding.yml --repo
 ```
+
+All batch modes skip entries that already have a `logo.png`.
 
 ### 4. Update READMEs
 
@@ -166,22 +209,26 @@ Heights come from `branding.yml`:
 - Base-only logos: `display.base_only.height`
 - Repo-level: `display.repo_level.height`
 
-### 5. Register New Skills or Sub-Repos
+### 5. Register New Skills, Sub-Repos, or Sibling Repos
 
-When a new skill or sub-repo is created and needs a logo:
+When a new skill, sub-repo, or sibling repo is created and needs a logo:
 
 **Ask the user:**
 
-> What suffix emoji should represent `<name>`? It should capture the
-> skill's purpose at a glance and be distinct from existing suffixes.
+> What suffix emoji should represent `<name>`? It should capture its
+> purpose at a glance and be distinct from existing suffixes (across
+> skills, subrepos, **and** siblings).
 
-If the user is unsure, suggest 2-3 options based on the skill's
-description and existing patterns in `branding.yml`.
+If the user is unsure, suggest 2-3 options based on the description
+and existing patterns in `branding.yml`.
 
 Then:
-1. Add entry to `branding.yml` under `skills:` or `subrepos:`
+1. Add entry under the correct scope (`skills:` / `subrepos:` / `siblings:`)
 2. Update `LOGO_CONVENTIONS.md` suffix table
-3. Run `generate-logo.sh --config branding.yml --skill <name>`
+3. Run the matching generate command:
+   - `--skill <name>` for skills
+   - `--subrepo <name>` for nested subrepos
+   - `--sibling <name>` for adjacent sibling repos
 4. Add the README header
 5. **Show the user the result** before committing
 

@@ -2,9 +2,19 @@
 # generate-logo.sh — Read branding.yml, download Fluent 3D emoji PNGs, composite into logos
 #
 # Usage:
-#   generate-logo.sh --config branding.yml --skill <skill-name>
-#   generate-logo.sh --config branding.yml --all
-#   generate-logo.sh --config branding.yml --repo
+#   generate-logo.sh --config branding.yml --skill    <skill-name>
+#   generate-logo.sh --config branding.yml --subrepo  <subrepo-name>
+#   generate-logo.sh --config branding.yml --sibling  <sibling-name>
+#   generate-logo.sh --config branding.yml --all              # all skills
+#   generate-logo.sh --config branding.yml --all-subrepos     # all subrepos
+#   generate-logo.sh --config branding.yml --all-siblings     # all siblings
+#   generate-logo.sh --config branding.yml --everything       # skills + subrepos + siblings
+#   generate-logo.sh --config branding.yml --repo             # repo-level logo
+#
+# Scope semantics:
+#   skill     — directory under skills/ inside the repo containing branding.yml
+#   subrepo   — repo nested inside this repo (default base: "." at repo root)
+#   sibling   — repo adjacent on disk, outside this repo (default base: "..")
 #
 # Requires: python3, Pillow, PyYAML, curl
 
@@ -16,25 +26,32 @@ COMPOSE_SCRIPT="$SCRIPT_DIR/compose_logo.py"
 
 CONFIG=""
 MODE=""
-SKILL_NAME=""
+TARGET_NAME=""
 
 # ── Parse arguments ──────────────────────────────────────────────
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --config) CONFIG="$2"; shift 2 ;;
-    --skill)  MODE="skill"; SKILL_NAME="$2"; shift 2 ;;
-    --all)    MODE="all"; shift ;;
-    --repo)   MODE="repo"; shift ;;
-    *)        echo "Unknown flag: $1"; exit 1 ;;
+    --config)         CONFIG="$2"; shift 2 ;;
+    --skill)          MODE="skill";   TARGET_NAME="$2"; shift 2 ;;
+    --subrepo)        MODE="subrepo"; TARGET_NAME="$2"; shift 2 ;;
+    --sibling)        MODE="sibling"; TARGET_NAME="$2"; shift 2 ;;
+    --all)            MODE="all"; shift ;;
+    --all-subrepos)   MODE="all-subrepos"; shift ;;
+    --all-siblings)   MODE="all-siblings"; shift ;;
+    --everything)     MODE="everything"; shift ;;
+    --repo)           MODE="repo"; shift ;;
+    *)                echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
 
 if [[ -z "$CONFIG" ]]; then
   echo "ERROR: --config <path-to-branding.yml> is required"
   echo "Usage:"
-  echo "  $0 --config branding.yml --skill <skill-name>"
-  echo "  $0 --config branding.yml --all"
+  echo "  $0 --config branding.yml --skill    <skill-name>"
+  echo "  $0 --config branding.yml --subrepo  <subrepo-name>"
+  echo "  $0 --config branding.yml --sibling  <sibling-name>"
+  echo "  $0 --config branding.yml --all | --all-subrepos | --all-siblings | --everything"
   echo "  $0 --config branding.yml --repo"
   exit 1
 fi
@@ -131,9 +148,69 @@ yaml_skill_names() {
 import yaml
 with open('$CONFIG') as f:
     cfg = yaml.safe_load(f)
-for name in cfg.get('skills', {}):
+for name in cfg.get('skills') or {}:
     print(name)
 "
+}
+
+yaml_subrepo_names() {
+  python3 -c "
+import yaml
+with open('$CONFIG') as f:
+    cfg = yaml.safe_load(f)
+for name in cfg.get('subrepos') or {}:
+    print(name)
+"
+}
+
+yaml_sibling_names() {
+  python3 -c "
+import yaml
+with open('$CONFIG') as f:
+    cfg = yaml.safe_load(f)
+for name in cfg.get('siblings') or {}:
+    print(name)
+"
+}
+
+# Resolve an absolute output directory for a subrepo or sibling entry.
+# Order of precedence:
+#   1. Per-entry `path:` (treated as relative to branding.yml's repo root, unless absolute)
+#   2. `<scope>_base_path` + name
+#
+# Args: <scope: subrepos|siblings> <name> <default_base_path>
+resolve_entry_dir() {
+  local scope="$1"
+  local name="$2"
+  local default_base="$3"
+
+  python3 - "$CONFIG" "$REPO_ROOT" "$scope" "$name" "$default_base" <<'PY'
+import os, sys, yaml
+
+config_path, repo_root, scope, name, default_base = sys.argv[1:6]
+
+with open(config_path) as f:
+    cfg = yaml.safe_load(f) or {}
+
+entries = cfg.get(scope) or {}
+if name not in entries:
+    print(f"ERROR: '{name}' not found under '{scope}' in {config_path}", file=sys.stderr)
+    sys.exit(1)
+
+entry = entries[name] or {}
+override = entry.get("path")
+
+base_key = f"{scope}_base_path"
+base = cfg.get(base_key, default_base)
+
+if override:
+    target = override if os.path.isabs(override) else os.path.join(repo_root, override)
+else:
+    base_abs = base if os.path.isabs(base) else os.path.join(repo_root, base)
+    target = os.path.join(base_abs, name)
+
+print(os.path.normpath(target))
+PY
 }
 
 # ── Download a single Fluent 3D emoji PNG ────────────────────────
@@ -161,13 +238,23 @@ download_emoji() {
 
   local encoded_folder
   encoded_folder=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$folder'))")
-  local url="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/${encoded_folder}/3D/${safe_name}_3d.png"
+
+  # Fluent 3D layout has two shapes:
+  #   (a) No skin tones: assets/<Folder>/3D/<name>_3d.png
+  #   (b) Skin-toned:    assets/<Folder>/Default/3D/<name>_3d_default.png
+  local base="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/${encoded_folder}"
+  local url_plain="${base}/3D/${safe_name}_3d.png"
+  local url_default="${base}/Default/3D/${safe_name}_3d_default.png"
 
   echo "Downloading: $folder..." >&2
-  if curl -fsSL "$url" -o "$cache_path" 2>/dev/null; then
+  if curl -fsSL "$url_plain" -o "$cache_path" 2>/dev/null; then
+    echo "$cache_path"
+  elif curl -fsSL "$url_default" -o "$cache_path" 2>/dev/null; then
     echo "$cache_path"
   else
-    echo "ERROR: Failed to download $url" >&2
+    echo "ERROR: Failed to download $folder (tried plain + skin-tone-Default layouts)" >&2
+    echo "  $url_plain" >&2
+    echo "  $url_default" >&2
     rm -f "$cache_path"
     return 1
   fi
@@ -201,6 +288,32 @@ for e in cfg['skills']['$skill']['suffix']:
   # Skills: base first, then suffix
   echo "$base_emojis"
   echo "$suffix_emojis"
+}
+
+# Build emoji list for a subrepo or sibling entry.
+# Same convention as skills: base mark first, suffix appended.
+# Args: <scope: subrepos|siblings> <name>
+get_entry_emojis() {
+  local scope="$1"
+  local name="$2"
+
+  python3 - "$CONFIG" "$scope" "$name" <<'PY'
+import sys, yaml
+
+config_path, scope, name = sys.argv[1:4]
+with open(config_path) as f:
+    cfg = yaml.safe_load(f) or {}
+
+for entry in cfg.get("base_mark", []):
+    print(entry["emoji"])
+
+entries = cfg.get(scope) or {}
+if name not in entries:
+    sys.exit(f"ERROR: '{name}' not found under '{scope}'")
+
+for e in (entries[name] or {}).get("suffix", []):
+    print(e)
+PY
 }
 
 # ── Composite a list of emojis into a logo ───────────────────────
@@ -245,6 +358,34 @@ generate_for_skill() {
   generate_logo "$output" "${emojis[@]}"
 }
 
+# ── Generate for a single subrepo or sibling ─────────────────────
+
+generate_for_entry() {
+  local scope="$1"       # subrepos | siblings
+  local name="$2"
+  local default_base="$3"
+
+  local target_dir
+  target_dir=$(resolve_entry_dir "$scope" "$name" "$default_base")
+
+  if [[ ! -d "$target_dir" ]]; then
+    echo "WARNING: Target directory does not exist: $target_dir" >&2
+    echo "  Creating it so logo.png can be written." >&2
+    mkdir -p "$target_dir"
+  fi
+
+  local output="$target_dir/logo.png"
+
+  echo "Generating logo for $scope/$name → $output"
+
+  local emojis=()
+  while IFS= read -r e; do
+    emojis+=("$e")
+  done < <(get_entry_emojis "$scope" "$name")
+
+  generate_logo "$output" "${emojis[@]}"
+}
+
 # ── Generate repo-level logo ────────────────────────────────────
 
 generate_for_repo() {
@@ -264,19 +405,72 @@ generate_for_repo() {
 
 # ── Main dispatch ────────────────────────────────────────────────
 
+run_all_skills() {
+  while IFS= read -r skill; do
+    [[ -z "$skill" ]] && continue
+    if [[ ! -f "$REPO_ROOT/skills/$skill/logo.png" ]]; then
+      generate_for_skill "$skill"
+    else
+      echo "Skipping skill/$skill (logo.png exists)"
+    fi
+  done < <(yaml_skill_names)
+}
+
+run_all_subrepos() {
+  while IFS= read -r name; do
+    [[ -z "$name" ]] && continue
+    local target_dir
+    target_dir=$(resolve_entry_dir "subrepos" "$name" ".")
+    if [[ -f "$target_dir/logo.png" ]]; then
+      echo "Skipping subrepo/$name (logo.png exists at $target_dir)"
+    else
+      generate_for_entry "subrepos" "$name" "."
+    fi
+  done < <(yaml_subrepo_names)
+}
+
+run_all_siblings() {
+  while IFS= read -r name; do
+    [[ -z "$name" ]] && continue
+    local target_dir
+    target_dir=$(resolve_entry_dir "siblings" "$name" "..")
+    if [[ -f "$target_dir/logo.png" ]]; then
+      echo "Skipping sibling/$name (logo.png exists at $target_dir)"
+    else
+      generate_for_entry "siblings" "$name" ".."
+    fi
+  done < <(yaml_sibling_names)
+}
+
 case "$MODE" in
   skill)
-    generate_for_skill "$SKILL_NAME"
+    generate_for_skill "$TARGET_NAME"
+    ;;
+
+  subrepo)
+    generate_for_entry "subrepos" "$TARGET_NAME" "."
+    ;;
+
+  sibling)
+    generate_for_entry "siblings" "$TARGET_NAME" ".."
     ;;
 
   all)
-    while IFS= read -r skill; do
-      if [[ ! -f "$REPO_ROOT/skills/$skill/logo.png" ]]; then
-        generate_for_skill "$skill"
-      else
-        echo "Skipping $skill (logo.png exists)"
-      fi
-    done < <(yaml_skill_names)
+    run_all_skills
+    ;;
+
+  all-subrepos)
+    run_all_subrepos
+    ;;
+
+  all-siblings)
+    run_all_siblings
+    ;;
+
+  everything)
+    run_all_skills
+    run_all_subrepos
+    run_all_siblings
     ;;
 
   repo)
@@ -284,7 +478,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "ERROR: Specify --skill <name>, --all, or --repo"
+    echo "ERROR: Specify one of: --skill, --subrepo, --sibling, --all, --all-subrepos, --all-siblings, --everything, --repo"
     exit 1
     ;;
 esac

@@ -50,22 +50,38 @@ skill and sub-repo logo.
 > main README. Convention is to put the base mark last and lead with
 > descriptive emojis (e.g. 📊🔬✨🏭). Or it can just be the base mark alone.
 
-### 5. Scan for Skills and Sub-Repos
+### 5. Scan for Skills, Sub-Repos, and Siblings
 
-Scan the workspace for existing skills (directories under `skills/`) and
-any sibling repos that might share the brand.
+Scan for three distinct scopes:
+
+1. **Skills** — directories under `skills/` in this repo
+2. **Sub-repos** — repos nested inside this repo (git submodules, or
+   directories at repo root that are themselves separate repos)
+3. **Siblings** — repos adjacent on disk, outside this repo
+   (e.g. sharing the same parent workspace dir). Ask the user to
+   confirm the workspace layout before scanning.
+
+**Ask the user for workspace layout if siblings are in play:**
+
+> Where do sibling repos live relative to this repo's root?
+> Default is the parent directory (`..`). Confirm or provide a custom
+> `siblings_base_path`.
 
 **Show the user what was found and ask:**
 
-> I found these skills: [list]. And these potential sub-repos: [list].
-> Which ones should get a logo? For each one, what suffix emoji fits?
+> I found these skills: [list].
+> Candidate sub-repos: [list].
+> Candidate siblings: [list].
+> Which ones should get a logo? For each, what suffix emoji fits?
 
-For each skill/sub-repo, ask for:
-- A suffix emoji (suggest one based on the skill's purpose if possible)
-- Confirm the reasoning
+For each entry, collect:
+- A suffix emoji (suggest one based on purpose if possible)
+- The reasoning
+- Optional `path:` override if the dir name on disk doesn't match the key
 
-If there are many, present a proposed table and ask for approval or edits
-rather than asking one-by-one.
+If there are many, present a proposed table grouped by scope and ask
+for approval or edits rather than asking one-by-one. Ensure suffixes
+are unique **across all three scopes**.
 
 ### 6. Where to Put LOGO_CONVENTIONS.md
 
@@ -97,13 +113,22 @@ adjust if anything looks off.
 
 # All skill logos
 ./scripts/generate-logo.sh --config branding.yml --all
+
+# All subrepo logos (only if `subrepos:` has entries)
+./scripts/generate-logo.sh --config branding.yml --all-subrepos
+
+# All sibling repo logos (only if `siblings:` has entries)
+./scripts/generate-logo.sh --config branding.yml --all-siblings
+
+# Or, in one shot: skills + subrepos + siblings
+./scripts/generate-logo.sh --config branding.yml --everything
 ```
 
 First run downloads Fluent 3D emoji PNGs to `~/.cache/brand-kit/fluent-emoji/`.
 
 ### 9. Add README Headers
 
-For each skill/sub-repo that got a `logo.png`, add this header to its README:
+For each skill / sub-repo / sibling that got a `logo.png`, add this header to its README:
 
 ```html
 <p align="center">
@@ -129,10 +154,14 @@ replaced with the logo-based headers, or kept as-is until logos are pushed.
 ### 10. Verify
 
 - Each skill directory has a `logo.png`
+- Each subrepo directory listed in `subrepos:` has a `logo.png`
+- Each sibling directory listed in `siblings:` has a `logo.png`
 - Repo root has a `logo.png`
-- `LOGO_CONVENTIONS.md` suffix table matches `branding.yml`
+- `LOGO_CONVENTIONS.md` suffix table matches `branding.yml` (all three scopes)
 
 **Ask the user** if they want to commit the generated logos and config now.
+Note: sibling logos are committed to each sibling repo — ask whether
+the user wants to handle those commits or have you do it.
 
 ## Done
 
