@@ -38,6 +38,9 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [gpl-license-checker](skills/gpl-license-checker/) | Block GPL / AGPL / SSPL / unknown-license deps from contaminating MIT or Apache-2.0 repos — SPDX-keyed policy + known-quirks reference data. Problem statement, not prescription: the invoking agent decides how to look up and classify | `npx skills add FnSK4R17s/datascience-skills-factory --skill gpl-license-checker` |
 | [codespell](skills/codespell/) | Detect and fix typos in source + docs — slash command, PostToolUse hook (auto-fix on write), and pre-commit hook. Shared `.codespellrc` config across all three layers | `npx skills add FnSK4R17s/datascience-skills-factory --skill codespell` |
 | [mcp-python-sdk](skills/mcp-python-sdk/) | Build MCP servers and clients in Python — FastMCP decorators, low-level Server API, stdio and Streamable HTTP transports, OAuth authorization, and in-process testing patterns | `npx skills add FnSK4R17s/datascience-skills-factory --skill mcp-python-sdk` |
+| [langchain](skills/langchain/) | Guide agents writing LangChain v1 Python code — Runnable protocol / LCEL, messages + content blocks, structured output, streaming, `create_react_agent`, and the v0 → v1 migration map | `npx skills add FnSK4R17s/datascience-skills-factory --skill langchain` |
+| [langgraph](skills/langgraph/) | Build stateful agent graphs with LangGraph v1+ — graph API, state + reducers, checkpointing / persistence, human-in-the-loop interrupts, streaming modes, prebuilt agents, and the Functional API | `npx skills add FnSK4R17s/datascience-skills-factory --skill langgraph` |
+| [python-telegram-bot](skills/python-telegram-bot/) | Build Telegram bots with python-telegram-bot v21+ — Application lifecycle, handlers + filters, ConversationHandler states, CallbackContext + JobQueue, inline callbacks, webhooks, and persistence | `npx skills add FnSK4R17s/datascience-skills-factory --skill python-telegram-bot` |
 
 ## Skill Structure
 
