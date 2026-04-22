@@ -78,3 +78,8 @@ skills:
     suffix: ["🚦"]
     name: Vertical traffic light
     reason: "Red-Green-Refactor cycle"
+
+  gpl-license-checker:
+    suffix: ["🐃"]
+    name: Water buffalo
+    reason: "Stand-in for the GNU — block copyleft contamination at the gate"

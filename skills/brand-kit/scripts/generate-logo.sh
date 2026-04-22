@@ -102,6 +102,7 @@ declare -A EMOJI_FOLDERS=(
   ["🗺️"]="World map"
   ["🧭"]="Compass"
   ["🚦"]="Vertical traffic light"
+  ["🐃"]="Water buffalo"
 )
 
 # ── YAML parsing via Python (avoids yq dependency) ───────────────
