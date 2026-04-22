@@ -1,0 +1,15 @@
+# Append to an existing .pre-commit-config.yaml, or use as the full file.
+# After saving, run `pre-commit install` once to activate the git hook.
+#
+# The hook reports (does not auto-fix) at commit time. To fix, run:
+#   codespell -w
+# then re-stage and retry the commit.
+
+repos:
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        # Reuses the repo's .codespellrc + .codespell-ignore-words.txt.
+        additional_dependencies: []
+        args: []

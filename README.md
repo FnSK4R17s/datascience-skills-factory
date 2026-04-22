@@ -36,6 +36,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [repo-best-practices](skills/repo-best-practices/) | Bootstrap `CLAUDE.md` (symlinked to `AGENTS.md`) and `ANTIPATTERNS.md`, log user corrections as structured anti-patterns, and surface repeated tasks as skill + subagent extraction candidates | `npx skills add FnSK4R17s/datascience-skills-factory --skill repo-best-practices` |
 | [tdd](skills/tdd/) | Red-green-refactor TDD discipline as a context injection — adapted from mattpocock/skills/tdd. Soft skill, no enforcement, no state | `npx skills add FnSK4R17s/datascience-skills-factory --skill tdd` |
 | [gpl-license-checker](skills/gpl-license-checker/) | Block GPL / AGPL / SSPL / unknown-license deps from contaminating MIT or Apache-2.0 repos — SPDX-keyed policy, PyPI/npm/crates/GitHub lookups, optional PreToolUse hook | `npx skills add FnSK4R17s/datascience-skills-factory --skill gpl-license-checker` |
+| [codespell](skills/codespell/) | Detect and fix typos in source + docs — slash command, PostToolUse hook (auto-fix on write), and pre-commit hook. Shared `.codespellrc` config across all three layers | `npx skills add FnSK4R17s/datascience-skills-factory --skill codespell` |
 
 ## Skill Structure
 

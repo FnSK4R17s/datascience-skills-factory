@@ -83,3 +83,8 @@ skills:
     suffix: ["🐃"]
     name: Water buffalo
     reason: "Stand-in for the GNU — block copyleft contamination at the gate"
+
+  codespell:
+    suffix: ["🧙‍♂️"]
+    name: Man mage
+    reason: "Spell-checker — casts corrections on typos in source and docs"

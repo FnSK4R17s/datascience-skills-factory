@@ -1,0 +1,18 @@
+[codespell]
+# Skip binaries, lockfiles, vendor trees, build output, and compressed blobs.
+skip = .git,.venv,venv,node_modules,dist,build,target,__pycache__,*.lock,*.min.js,*.min.css,*.svg,*.pdf,*.png,*.jpg,*.jpeg,*.gif,*.webp,*.ico,*.zip,*.tar,*.gz,*.tgz,*.xz,*.so,*.dll,*.dylib,*.exe,*.bin,*.wasm,*.woff,*.woff2,*.ttf,*.otf,*.eot,*.class,*.jar,*.whl,*.pyc,package-lock.json,yarn.lock,pnpm-lock.yaml,poetry.lock,uv.lock,Cargo.lock,Gemfile.lock
+
+# Project-specific false positives. Add more here (one per line, lowercase).
+ignore-words = .codespell-ignore-words.txt
+
+# Do not rewrite words that contain these substrings even if they look wrong.
+# Example: "crate" often shows up as a rust term; "nd" is a common abbrev.
+# (These are handled by ignore-words; keep `ignore-regex` for tokenized cases.)
+# ignore-regex = \b[A-Fa-f0-9]{7,}\b  # git short hashes / hex blobs
+
+# Enable URI + name checking. Disable if it creates too much noise.
+check-hidden = true
+check-filenames = true
+
+# By default, codespell prints findings. Add -w on the CLI to rewrite.
+# quiet-level = 2
