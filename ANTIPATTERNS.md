@@ -23,6 +23,17 @@ and ordering correct.
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-04-22 — Skill prescribed implementation instead of pointing at the problem
+
+**What went wrong:** Shipped `gpl-license-checker` as a 400-line Python stack (registry lookups, license-string normalizer, markdown-policy parser, SPDX classifier, shell wrapper, PreToolUse hook). Every layer rots independently and the ecosystem (PyPI / npm / crates / GitHub) keeps changing the fields it exposes — each drift needs a patch to the shipped code. The skill also froze one particular solution into place: future agents hitting this file are now reading my Python instead of solving the problem in whatever way is best at the time they read it. Worse, the first "fix" I wrote for this entry doubled down: "ship a script only when..." — turning the lesson into another prescription.
+
+**Correct approach:** A skill defines the problem and points at where to look. State the goal, list authoritative sources, record the empirical traps seen in the wild (as reference data, not as required algorithms), and stop. Leave the implementation decision to the agent invoking the skill — it is, on average, smarter than the one that wrote the skill, and strictly smarter than the one that will write it next year. Reference data is durable (SPDX lists, quirk catalogues, known cross-source disagreements); implementation is not.
+
+**Context:** `skills/gpl-license-checker/scripts/check_package.py` and siblings replaced with `skills/gpl-license-checker/check-package.md` + `references/known-quirks.md`. Policy remains in `references/policy.md`. Compounding lesson: when migrating, translate first, delete second — I deleted the Python before writing the markdown and lost roughly half the empirical detail from memory. Restored via `git checkout HEAD --` and then re-translated with the source in view.
+
+---
+
+
 ## 2026-04-22 — Ship without end-to-end test
 
 **What went wrong:** 50KB skill passed 2 unit smoke tests proving script parses, not that system enforces what docs claim. First real R-G-R cycle: GREEN didn't lock tests. Headline feature dead.

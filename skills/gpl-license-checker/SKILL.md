@@ -2,120 +2,82 @@
 name: gpl-license-checker
 description: >
   Block copyleft licenses (GPL, AGPL, SSPL, LGPL when vendored) from entering
-  projects that ship under MIT, Apache-2.0, BSD, or other permissive licenses.
-  Scans Python, Node, Rust, Go, and Java manifests; queries package registries
-  for SPDX identifiers; verdicts each dep as allow, warn, or deny against a
-  configurable policy. Use before adding a new dependency, when reviewing a
-  PR that touches a manifest, when auditing an existing project for license
-  contamination, or when the user asks about license compatibility.
-  Triggers on: "license check", "GPL check", "can I use <lib>", "audit
-  licenses", "license compat", "is <lib> MIT compatible", "check deps",
-  "license violation".
+  projects that ship under permissive licenses (MIT, Apache-2.0, BSD).
+  Classifies a package against an SPDX-keyed allow / warn / deny policy.
+  Use before adding a new dependency, when reviewing a PR that touches a
+  manifest, or when auditing an existing project for license contamination.
+  Triggers on: "license check", "GPL check", "is <lib> MIT-compatible",
+  "can I use <lib>", "license compat".
 ---
 
 # GPL License Checker
 
 Prevent accidental inclusion of copyleft (GPL / AGPL / SSPL) or ambiguous
 (LGPL, GFDL) dependencies in projects that distribute under permissive
-licenses (MIT, Apache-2.0, BSD-*, ISC). One GPL dep contaminates the whole
-distribution — this skill catches it before you commit.
+licenses. One copyleft dep contaminates the whole distribution; this
+skill gives the agent the knowledge to catch it before the commit.
 
-## When to run
+The skill is a problem statement plus reference data — not an
+implementation. How to fetch, parse, and classify is up to the agent
+invoking it. Registries change; the problem and the policy don't.
 
-- **Before** editing `pyproject.toml`, `requirements*.txt`, `setup.py`, `setup.cfg`, `Pipfile`, `poetry.lock`, `package.json`, `Cargo.toml`, `go.mod`, or `pom.xml` to add a dep.
-- **After** cloning a repo you plan to ship, to audit what's already in there.
-- **On PR review** when the diff touches any manifest file.
-- **When the user asks** "can I use `<library>`?" or "is `<library>` MIT-compatible?".
+## When to invoke
 
-## The verdict policy
+- Before adding a package to `pyproject.toml`, `requirements*.txt`,
+  `setup.py`, `setup.cfg`, `Pipfile`, `package.json`, `Cargo.toml`,
+  `go.mod`, or `pom.xml`.
+- When the user asks "can I use `<library>`?" or "is `<library>`
+  MIT-compatible?".
+- When reviewing a diff that touches any of the above files.
 
-Loaded from [references/policy.md](references/policy.md). Summary:
+## The three files you need
 
-| Class | SPDX IDs | Verdict | Rationale |
-|-------|----------|---------|-----------|
-| **Permissive** | `MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `0BSD`, `Unlicense`, `CC0-1.0`, `PSF-2.0`, `Python-2.0`, `Zlib` | **allow** | no redistribution constraints |
-| **Weak copyleft** | `MPL-2.0`, `EPL-2.0`, `CDDL-1.0` | **warn** | file-level copyleft — safe if you don't modify the library |
-| **Lesser copyleft** | `LGPL-2.1`, `LGPL-2.1-or-later`, `LGPL-3.0`, `LGPL-3.0-or-later` | **warn** | dynamic import OK; **never** vendor, fork, or modify |
-| **Strong copyleft** | `GPL-2.0`, `GPL-2.0-or-later`, `GPL-3.0`, `GPL-3.0-or-later`, `AGPL-3.0`, `AGPL-3.0-or-later` | **deny** | viral — contaminates your distribution |
-| **Network copyleft** | `AGPL-3.0`, `SSPL-1.0`, `BUSL-1.1` | **deny** | triggers on network use, not just distribution |
-| **Docs copyleft** | `GFDL-1.1`, `GFDL-1.2`, `GFDL-1.3` | **deny** | affects any doc you copy from the library |
-| **Unknown / no license** | `NOASSERTION`, missing | **deny** | absence of license = no grant; assume all-rights-reserved |
+1. [check-package.md](check-package.md) — the problem statement. What to
+   check, which sources are authoritative, verdict classes, exit-code
+   contract, worked examples.
+2. [references/policy.md](references/policy.md) — the SPDX allow / warn /
+   deny lists. Source of truth. Extend it when a new license appears.
+3. [references/known-quirks.md](references/known-quirks.md) — empirical
+   catalogue of the weird shapes license metadata actually takes in the
+   wild (garbage strings, legacy notation, cross-source disagreement).
+   Useful to skim before solving a case that seems "off".
 
-## Usage
+Start with `check-package.md`. Reach for the others when the check
+surfaces something surprising.
 
-### Check one package
+## Verdict summary
 
-```bash
-${CLAUDE_SKILL_DIR}/scripts/check_package.sh pypi bashlex
-# -> DENY  bashlex           GPL-3.0            strong_copyleft
-${CLAUDE_SKILL_DIR}/scripts/check_package.sh pypi langgraph
-# -> ALLOW langgraph          MIT                permissive
-${CLAUDE_SKILL_DIR}/scripts/check_package.sh pypi python-telegram-bot
-# -> WARN  python-telegram-bot LGPL-3.0          lesser_copyleft  (dynamic import OK; do not vendor)
-${CLAUDE_SKILL_DIR}/scripts/check_package.sh npm  express
-${CLAUDE_SKILL_DIR}/scripts/check_package.sh crates serde
-${CLAUDE_SKILL_DIR}/scripts/check_package.sh github idank/bashlex
-```
+| Bucket | Verdict | Notes |
+|--------|---------|-------|
+| Permissive (MIT, Apache-2.0, BSD-*, ISC, CC0, PSF, Zlib, …) | ALLOW | Ship freely |
+| Weak / lesser copyleft (MPL-2.0, LGPL-*, EPL-2.0, CDDL) | WARN | Dynamic import OK; vendoring converts to DENY |
+| Strong / network copyleft (GPL-*, AGPL-*, SSPL) | DENY | Viral — blocks distribution |
+| Source-available (BUSL-1.1, Elastic-2.0, Commons-Clause) | DENY | Not open source |
+| Docs copyleft (GFDL-*) | DENY | Contaminates copied docs |
+| Share-alike (CC-BY-SA-*) | DENY | Viral on derived works |
+| Missing / unresolvable | DENY | Absence of match = absence of grant |
 
-Exit code: `0` allow, `1` warn, `2` deny, `3` lookup error. Use in shell pipelines or hooks.
+Full SPDX lists in [references/policy.md](references/policy.md).
 
-### Scan a whole manifest
+## The LGPL nuance (why WARN, not DENY)
 
-```bash
-${CLAUDE_SKILL_DIR}/scripts/scan_manifest.py pyproject.toml
-${CLAUDE_SKILL_DIR}/scripts/scan_manifest.py package.json
-${CLAUDE_SKILL_DIR}/scripts/scan_manifest.py requirements.txt
-${CLAUDE_SKILL_DIR}/scripts/scan_manifest.py Cargo.toml
-```
+Copyleft scope for LGPL depends on how you use the library:
 
-Output format per line: `VERDICT <pkg> <spdx> <class>`. Exit code is the **worst** verdict across all deps (2 if any deny, 1 if any warn, 0 if all allow).
+- **Dynamic import** (`import foo`, `require('foo')`, standard
+  `pip` / `npm` / `cargo` installs): separate work. Your code keeps its
+  own license.
+- **Vendor / fork / statically link / modify**: combined work. Your
+  fork falls under LGPL obligations (source distribution, replacement
+  rights, notices).
 
-### Before adding a new dep (the 80% case)
+The skill can't infer which mode you're in. When you get a WARN, ask:
+*am I about to vendor or modify this?* If yes, find a permissive
+replacement. If no, proceed.
 
-When Claude is about to run `pip install <x>`, `uv add <x>`, `npm install <x>`, `cargo add <x>`, etc., run `check_package.sh` on it first. If the verdict is **deny**, do not add it — stop and surface the finding to the user with replacement candidates.
+## Project-local overrides
 
-### Explain LGPL's two modes
-
-LGPL gets a `warn` not a `deny` because the copyleft scope depends on **how** you use the library:
-
-- **Dynamic import (`import foo` in Python, `require('foo')` in Node)** — separate work. Your code stays under its own license. Safe.
-- **Vendor / fork / statically link / modify** — combined work. Your fork falls under LGPL. You must distribute source for the LGPL portion, allow replacement, and carry the notices.
-
-The skill cannot infer which mode you're in. When you see a `warn` for LGPL, ask: *am I vendoring this?* If no, proceed. If yes, pick a permissive replacement.
-
-## Integration as a PreToolUse hook (optional, opinionated)
-
-Add to your project `.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_SKILL_DIR}/scripts/hook_scan.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-The hook inspects the file path in the tool input — if it matches a known manifest, it re-scans and blocks the write on `deny` verdict. Not installed by default; opt in per project.
-
-## Known failure modes
-
-1. **PyPI sometimes returns `"License: UNKNOWN"`** even for properly-licensed packages because uploaders filled the legacy `license` field instead of `classifiers`. The script falls back to classifiers, then to a GitHub lookup if a `Home-page` or `Source` URL is present.
-2. **GitHub API caps at 60 req/hour unauthenticated.** Set `GITHUB_TOKEN` in the environment to get 5000 req/hour. The script honors it.
-3. **Monorepos with multiple licenses.** SPDX allows expressions like `Apache-2.0 OR MIT` — the script picks the most permissive. `GPL-2.0 WITH Classpath-exception-2.0` is treated as a distinct ID (warn, not deny) — see policy.md.
-4. **"NOASSERTION"** from GitHub means the repo has a LICENSE file that SPDX couldn't classify. Treat as `deny` until manually resolved — absence of a clear license means no grant.
-
-## What this skill does NOT do
-
-- **Does not scan transitive dependencies.** It only checks what you declare in the manifest. For full SBOM coverage, use `pip-licenses`, `license-checker` (npm), `cargo-deny`, etc., and pipe into this policy.
-- **Does not rewrite your code.** It reports. You decide to replace or override.
-- **Does not catch dual-licensed packages where you picked the wrong half.** Some packages are `GPL-3.0 OR Commercial` — if you pick GPL mode, you still have GPL obligations.
+For legitimate exceptions (e.g. a GPL CLI tool invoked only as a
+subprocess), a downstream repo carries `license-overrides.yml` next to
+the manifest it protects. Spec in [check-package.md](check-package.md).
+Keep the file with the manifest so the audit trail travels with the
+repo.
