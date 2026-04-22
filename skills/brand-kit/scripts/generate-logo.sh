@@ -23,6 +23,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CACHE_DIR="${HOME}/.cache/brand-kit/fluent-emoji"
 COMPOSE_SCRIPT="$SCRIPT_DIR/compose_logo.py"
+EMOJI_MAP="$SCRIPT_DIR/../references/emoji-folders.json"
 
 CONFIG=""
 MODE=""
@@ -63,47 +64,63 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "$CONFIG")" && pwd)"
 
-# ── Emoji name to Fluent folder lookup ───────────────────────────
-# This is the canonical mapping. Add new entries here when new emojis are used.
+# ── Emoji → Fluent asset path lookup ─────────────────────────────
+# Canonical mapping lives in references/emoji-folders.json, generated
+# from microsoft/fluentui-emoji via scripts/build-emoji-map.py.
+#
+# Precedence for a given emoji:
+#   1. branding.yml `emoji_folders:` override (per-ecosystem escape hatch)
+#   2. references/emoji-folders.json (ships with the skill; ~3145 entries)
 
-declare -A EMOJI_FOLDERS=(
-  ["🏭"]="Factory"
-  ["🔍"]="Magnifying glass tilted left"
-  ["🎨"]="Artist palette"
-  ["📡"]="Satellite antenna"
-  ["📋"]="Clipboard"
-  ["📊"]="Bar chart"
-  ["🔬"]="Microscope"
-  ["✨"]="Sparkles"
-  ["🎪"]="Circus tent"
-  ["🪢"]="Knot"
-  ["⚓"]="Anchor"
-  ["🦞"]="Lobster"
-  ["🏠"]="House"
-  ["🔐"]="Locked with key"
-  ["💪"]="Flexed biceps"
-  ["🔭"]="Telescope"
-  ["📚"]="Books"
-  ["🧠"]="Brain"
-  ["🚪"]="Door"
-  ["🧪"]="Test tube"
-  ["🧬"]="Dna"
-  ["📈"]="Chart increasing"
-  ["🔧"]="Wrench"
-  ["🌐"]="Globe with meridians"
-  ["📦"]="Package"
-  ["🔗"]="Link"
-  ["⚡"]="High voltage"
-  ["🛡️"]="Shield"
-  ["📝"]="Memo"
-  ["🎯"]="Direct hit"
-  ["🔄"]="Counterclockwise arrows button"
-  ["🏗️"]="Building construction"
-  ["🗺️"]="World map"
-  ["🧭"]="Compass"
-  ["🚦"]="Vertical traffic light"
-  ["🐃"]="Water buffalo"
-)
+if [[ ! -f "$EMOJI_MAP" ]]; then
+  echo "ERROR: emoji map not found: $EMOJI_MAP" >&2
+  echo "Run scripts/build-emoji-map.py to regenerate." >&2
+  exit 1
+fi
+
+# Return the Fluent folder name for a given emoji, consulting the config
+# override first and falling back to the JSON map. Empty string on miss.
+lookup_folder() {
+  local emoji="$1"
+  python3 - "$CONFIG" "$EMOJI_MAP" "$emoji" <<'PY'
+import json, sys, yaml
+cfg_path, map_path, emoji = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(cfg_path) as f:
+    cfg = yaml.safe_load(f) or {}
+override = (cfg.get("emoji_folders") or {}).get(emoji)
+if override:
+    print(override)
+    sys.exit(0)
+with open(map_path, encoding="utf-8") as f:
+    mapping = json.load(f)
+entry = mapping.get(emoji)
+if entry:
+    print(entry["folder"])
+PY
+}
+
+# Return the asset subpath (relative to assets/ on GitHub) for a given
+# emoji. Config override yields just a folder name; if so, we synthesize
+# the default "<Folder>/3D/<slug>_3d.png" path.
+lookup_asset_path() {
+  local emoji="$1"
+  python3 - "$CONFIG" "$EMOJI_MAP" "$emoji" <<'PY'
+import json, sys, yaml
+cfg_path, map_path, emoji = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(cfg_path) as f:
+    cfg = yaml.safe_load(f) or {}
+override_folder = (cfg.get("emoji_folders") or {}).get(emoji)
+if override_folder:
+    slug = override_folder.replace(" ", "_").lower()
+    print(f"{override_folder}/3D/{slug}_3d.png")
+    sys.exit(0)
+with open(map_path, encoding="utf-8") as f:
+    mapping = json.load(f)
+entry = mapping.get(emoji)
+if entry:
+    print(entry["asset_path"])
+PY
+}
 
 # ── YAML parsing via Python (avoids yq dependency) ───────────────
 
@@ -219,17 +236,23 @@ PY
 
 download_emoji() {
   local emoji="$1"
-  local folder="${EMOJI_FOLDERS[$emoji]:-}"
 
-  if [[ -z "$folder" ]]; then
-    echo "ERROR: No Fluent folder mapping for emoji: $emoji" >&2
-    echo "Add it to EMOJI_FOLDERS in generate-logo.sh" >&2
+  local asset_path
+  asset_path="$(lookup_asset_path "$emoji")"
+  if [[ -z "$asset_path" ]]; then
+    echo "ERROR: No Fluent mapping for emoji: $emoji" >&2
+    echo "  Either add an override to '$CONFIG' under 'emoji_folders:'," >&2
+    echo "  or refresh '$EMOJI_MAP' via scripts/build-emoji-map.py." >&2
     return 1
   fi
 
-  local safe_name
-  safe_name=$(echo "$folder" | tr ' ' '_' | tr '[:upper:]' '[:lower:]')
-  local cache_path="$CACHE_DIR/${safe_name}_3d.png"
+  local folder
+  folder="$(lookup_folder "$emoji")"
+
+  # Cache key = the asset path, flattened into a filesystem-safe name.
+  local cache_key
+  cache_key="$(echo -n "$asset_path" | tr '/' '_' | tr ' ' '_')"
+  local cache_path="$CACHE_DIR/$cache_key"
 
   if [[ -f "$cache_path" ]]; then
     echo "$cache_path"
@@ -238,25 +261,20 @@ download_emoji() {
 
   mkdir -p "$CACHE_DIR"
 
-  local encoded_folder
-  encoded_folder=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$folder'))")
+  local encoded_path
+  encoded_path=$(python3 -c "
+import sys, urllib.parse
+print('/'.join(urllib.parse.quote(p) for p in sys.argv[1].split('/')))
+" "$asset_path")
 
-  # Fluent 3D layout has two shapes:
-  #   (a) No skin tones: assets/<Folder>/3D/<name>_3d.png
-  #   (b) Skin-toned:    assets/<Folder>/Default/3D/<name>_3d_default.png
-  local base="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/${encoded_folder}"
-  local url_plain="${base}/3D/${safe_name}_3d.png"
-  local url_default="${base}/Default/3D/${safe_name}_3d_default.png"
+  local url="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/${encoded_path}"
 
   echo "Downloading: $folder..." >&2
-  if curl -fsSL "$url_plain" -o "$cache_path" 2>/dev/null; then
-    echo "$cache_path"
-  elif curl -fsSL "$url_default" -o "$cache_path" 2>/dev/null; then
+  if curl -fsSL "$url" -o "$cache_path" 2>/dev/null; then
     echo "$cache_path"
   else
-    echo "ERROR: Failed to download $folder (tried plain + skin-tone-Default layouts)" >&2
-    echo "  $url_plain" >&2
-    echo "  $url_default" >&2
+    echo "ERROR: Failed to download $folder" >&2
+    echo "  URL: $url" >&2
     rm -f "$cache_path"
     return 1
   fi

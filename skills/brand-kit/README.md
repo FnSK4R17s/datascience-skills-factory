@@ -54,10 +54,27 @@ brand-kit/
 ├── README.md                         # This file
 ├── scripts/
 │   ├── compose_logo.py               # Pillow compositing script
-│   └── generate-logo.sh              # Config-driven generator (reads branding.yml)
+│   ├── generate-logo.sh              # Config-driven generator (reads branding.yml)
+│   └── build-emoji-map.py            # Regenerate emoji-folders.json from a fluentui-emoji clone
 ├── references/
-│   └── fluent-emoji-map.md           # Emoji → Fluent folder name mappings
+│   ├── emoji-folders.json            # Full emoji → folder + asset-path map (~3145 entries)
+│   └── fluent-emoji-map.md           # Prose notes on the Fluent naming scheme
 └── assets/
     ├── branding.yml                  # Template — copy to repo root and customize
     └── LOGO_CONVENTIONS.md           # Template — copy to repo root or guiding_docs/
 ```
+
+## Refreshing the emoji map
+
+The shipped `references/emoji-folders.json` covers every glyph Microsoft
+has released. After a Fluent emoji update, regenerate with:
+
+```bash
+cd /tmp && git clone --depth 1 https://github.com/microsoft/fluentui-emoji
+python3 scripts/build-emoji-map.py \
+  --clone /tmp/fluentui-emoji \
+  --out references/emoji-folders.json \
+  --verify
+```
+
+`--verify` asserts every derived asset path exists on disk before writing.
