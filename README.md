@@ -37,6 +37,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [tdd](skills/tdd/) | Red-green-refactor TDD discipline as a context injection — adapted from mattpocock/skills/tdd. Soft skill, no enforcement, no state | `npx skills add FnSK4R17s/datascience-skills-factory --skill tdd` |
 | [gpl-license-checker](skills/gpl-license-checker/) | Block GPL / AGPL / SSPL / unknown-license deps from contaminating MIT or Apache-2.0 repos — SPDX-keyed policy + known-quirks reference data. Problem statement, not prescription: the invoking agent decides how to look up and classify | `npx skills add FnSK4R17s/datascience-skills-factory --skill gpl-license-checker` |
 | [codespell](skills/codespell/) | Detect and fix typos in source + docs — slash command, PostToolUse hook (auto-fix on write), and pre-commit hook. Shared `.codespellrc` config across all three layers | `npx skills add FnSK4R17s/datascience-skills-factory --skill codespell` |
+| [mcp-python-sdk](skills/mcp-python-sdk/) | Build MCP servers and clients in Python — FastMCP decorators, low-level Server API, stdio and Streamable HTTP transports, OAuth authorization, and in-process testing patterns | `npx skills add FnSK4R17s/datascience-skills-factory --skill mcp-python-sdk` |
 
 ## Skill Structure
 
