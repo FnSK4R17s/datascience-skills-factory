@@ -35,6 +35,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [plan-feature](skills/plan-feature/) | Walk through Research → Requirements → Deep Research → Backlog Item stages, producing a single agent-ready, Karpathy-style backlog doc per feature under `plan/<slug>/` | `npx skills add FnSK4R17s/datascience-skills-factory --skill plan-feature` |
 | [repo-best-practices](skills/repo-best-practices/) | Bootstrap `CLAUDE.md` (symlinked to `AGENTS.md`) and `ANTIPATTERNS.md`, log user corrections as structured anti-patterns, and surface repeated tasks as skill + subagent extraction candidates | `npx skills add FnSK4R17s/datascience-skills-factory --skill repo-best-practices` |
 | [tdd](skills/tdd/) | Red-green-refactor TDD discipline as a context injection — adapted from mattpocock/skills/tdd. Soft skill, no enforcement, no state | `npx skills add FnSK4R17s/datascience-skills-factory --skill tdd` |
+| [gpl-license-checker](skills/gpl-license-checker/) | Block GPL / AGPL / SSPL / unknown-license deps from contaminating MIT or Apache-2.0 repos — SPDX-keyed policy, PyPI/npm/crates/GitHub lookups, optional PreToolUse hook | `npx skills add FnSK4R17s/datascience-skills-factory --skill gpl-license-checker` |
 
 ## Skill Structure
 
