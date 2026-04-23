@@ -4,7 +4,11 @@ Sources: `docs/README.md`, `docs/mcpio__docs__learn__server-concepts.md`,
 `docs/mcpio__specification__2025-11-25__basic__lifecycle.md`,
 `docs/mcpio__specification__2025-11-25__server__tools.md`,
 `docs/mcpio__specification__2025-11-25__server__resources.md`,
-`docs/mcpio__specification__2025-11-25__server__prompts.md`
+`docs/mcpio__specification__2025-11-25__server__prompts.md`,
+`docs/mcpio__specification__2025-11-25__server__utilities__completion.md`,
+`docs/mcpio__specification__2025-11-25__server__utilities__logging.md`,
+`docs/mcpio__specification__2025-11-25__server__utilities__pagination.md`,
+`docs/mcpio__specification__2025-11-25__basic__index.md`
 
 ## The three primitives
 
@@ -212,3 +216,78 @@ async def summarize(text: str, ctx: Context) -> str:
 
 Sampling puts the client in control of LLM access, user approval, and model
 selection. The server never calls an LLM directly.
+
+## Argument completion
+
+Servers can provide autocompletion suggestions for prompt arguments and resource
+template parameters via `completions/complete`:
+
+```python
+from mcp import ClientSession
+from mcp.types import PromptReference, ResourceTemplateReference
+
+# Client-side — server provides suggestions
+result = await session.complete(
+    ref=ResourceTemplateReference(type="ref/resource", uri="weather://{city}"),
+    argument={"name": "city", "value": "lon"},
+    context_arguments={"country": "UK"},  # previously resolved args
+)
+# result.completion.values — list of suggestion strings
+```
+
+FastMCP can handle completions if you register a completion handler. The spec
+defines this in `mcpio__specification__2025-11-25__server__utilities__completion.md`.
+
+## Pagination
+
+List operations (`tools/list`, `resources/list`, etc.) support cursor-based
+pagination. Servers yield results in chunks; clients pass the cursor forward.
+
+```python
+# Client side — paginating through tools
+result = await session.list_tools()
+while result.next_cursor:  # v2 snake_case
+    result = await session.list_tools(
+        params=PaginatedRequestParams(cursor=result.next_cursor)
+    )
+    # process result.tools
+```
+
+Cursors are opaque — don't parse or construct them. An absent `nextCursor` means
+no more pages.
+
+## Logging
+
+Servers send structured log messages to clients. 8 RFC-5424 severity levels
+(`debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`).
+
+```python
+# Via context (FastMCP) — preferred
+await ctx.info("Server started")
+await ctx.warning("Rate limit approaching")
+
+# Low-level
+await ctx.session.send_log_message(level="info", data="Server started")
+```
+
+Clients may set minimum log level via `logging/setLevel`. Servers must declare
+`logging` capability if they emit log messages.
+
+**stdio note**: log to stderr or via MCP log messages. Never log to stdout.
+
+## Icons
+
+Tools, resources, prompts, and the server itself can expose icons for UI display:
+
+```python
+from mcp.server.fastmcp import FastMCP, Icon
+
+icon = Icon(src="icon.png", mimeType="image/png", sizes="64x64")
+mcp = FastMCP("My Server", icons=[icon])
+
+@mcp.tool(icons=[icon])
+def my_tool(): ...
+```
+
+Icons must use HTTPS or `data:` URIs. Clients should treat icon bytes as
+untrusted input. Source: `docs/mcpio__specification__2025-11-25__basic__index.md`.
