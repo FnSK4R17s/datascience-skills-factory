@@ -1,132 +1,156 @@
-# Streaming
+# Streaming Reference
 
 Source: `docs/streaming.md`
 
 ## Methods
 
-`graph.stream(input, ...)` (sync) and `graph.astream(input, ...)` (async) yield
-streamed output as iterators. Pass one or more stream modes to control content.
+```python
+graph.stream(inputs, config, stream_mode=..., version="v2")    # sync
+graph.astream(inputs, config, stream_mode=..., version="v2")   # async
+graph.invoke(inputs, config, version="v2")                     # returns GraphOutput
+```
 
-## v2 output format (recommended)
+## v2 format (LangGraph >= 1.1, recommended)
 
-Pass `version="v2"` for a **unified `StreamPart` format** regardless of mode
-count or subgraph settings. Available from LangGraph >= 1.1.
+Pass `version="v2"` to get a unified `StreamPart` dict for every chunk:
 
-Every chunk is:
 ```python
 {
     "type": "values" | "updates" | "messages" | "custom" | "checkpoints" | "tasks" | "debug",
-    "ns": (),        # namespace tuple; populated for subgraph events
-    "data": ...      # payload type varies by mode
+    "ns": (),       # namespace tuple; populated for subgraph events
+    "data": ...,    # payload varies by type
 }
 ```
 
-Filter by `chunk["type"]` for full type narrowing.
+Use `chunk["type"]` to narrow and get typed `data`. Import types from `langgraph.types`:
+`ValuesStreamPart`, `UpdatesStreamPart`, `MessagesStreamPart`, `CustomStreamPart`,
+`CheckpointStreamPart`, `TasksStreamPart`, `DebugStreamPart`.
+
+v1 (default, no `version="v2"`): format changes based on how many modes and whether
+`subgraphs=True`. Single mode → raw data. Multiple modes → `(mode, data)` tuples.
+Subgraphs → `(namespace, data)` tuples. Use v2 for new code.
 
 ## Stream modes
 
-| Mode | Data | Typical use |
-|------|------|-------------|
-| `updates` | `{node_name: state_delta}` per step | See what each node changed |
-| `values` | Full state dict after each step | Inspect complete state evolution |
-| `messages` | `(message_chunk, metadata)` tuples | Stream LLM tokens to a UI |
-| `custom` | Arbitrary dict from `get_stream_writer()` | Progress, tool events, non-LangChain LLMs |
-| `checkpoints` | Same format as `get_state()` | Observe checkpoint writes |
-| `tasks` | Task start/finish events | Debug parallelism; requires checkpointer |
-| `debug` | Combines `checkpoints` + `tasks` + extra metadata | Maximum visibility |
+| Mode | Data shape | Use for |
+|------|-----------|---------|
+| `values` | Full state snapshot after each step | Know current graph state |
+| `updates` | Dict of `{node_name: updates}` per step | Know what each node changed |
+| `messages` | `(message_chunk, metadata)` from LLM calls | Token-by-token streaming |
+| `custom` | Arbitrary data from `get_stream_writer()` | Progress updates, any LLM |
+| `checkpoints` | Same format as `get_state()`; needs checkpointer | Checkpoint audit |
+| `tasks` | Task start/finish events; needs checkpointer | Node-level observability |
+| `debug` | All info (combines checkpoints + tasks + metadata) | Deep debugging |
 
-Source: `docs/streaming.md`.
+Pass multiple modes as a list; all produce `StreamPart` dicts in v2.
 
-## Usage examples
+## Example: multiple modes
 
-### updates (most common)
 ```python
-for chunk in graph.stream(inputs, stream_mode="updates", version="v2"):
+for chunk in graph.stream(inputs, stream_mode=["updates", "messages", "custom"],
+                           version="v2"):
     if chunk["type"] == "updates":
-        for node_name, delta in chunk["data"].items():
-            print(f"{node_name}: {delta}")
+        for node, state in chunk["data"].items():
+            print(f"{node}: {state}")
+    elif chunk["type"] == "messages":
+        msg, meta = chunk["data"]
+        print(msg.content, end="")
+    elif chunk["type"] == "custom":
+        print(f"progress: {chunk['data']}")
 ```
 
-### messages (LLM tokens)
-```python
-for chunk in graph.stream(inputs, stream_mode="messages", version="v2"):
-    if chunk["type"] == "messages":
-        msg, metadata = chunk["data"]
-        if msg.content:
-            print(msg.content, end="", flush=True)
-```
+## Custom data with `get_stream_writer`
 
-Filter tokens by node or model tag via `metadata["langgraph_node"]` or
-`metadata["tags"]`. Source: `docs/streaming.md`.
-
-### custom data
 ```python
 from langgraph.config import get_stream_writer
 
-def my_node(state: State):
+def my_node(state):
     writer = get_stream_writer()
-    writer({"status": "starting step 1"})
-    ...
+    writer({"status": "processing", "pct": 50})
+    return {"result": "done"}
+```
 
+**Python < 3.11 caveat:** `get_stream_writer()` does not work in async nodes because
+asyncio tasks before 3.11 lack context propagation. Instead, declare a `writer`
+parameter and LangGraph injects it:
+
+```python
+from langgraph.types import StreamWriter
+
+async def my_node(state, writer: StreamWriter):
+    writer({"status": "processing"})
+    return {"result": "done"}
+```
+
+## LLM token streaming (`messages` mode)
+
+```python
+for chunk in graph.stream(inputs, stream_mode="messages", version="v2"):
+    if chunk["type"] == "messages":
+        msg, meta = chunk["data"]
+        # Filter by node
+        if meta["langgraph_node"] == "call_model" and msg.content:
+            print(msg.content, end="")
+        # Filter by tag
+        if "joke" in meta.get("tags", []) and msg.content:
+            print(msg.content, end="")
+```
+
+Use `model.with_config({"tags": ["nostream"]})` to suppress tokens from a specific
+model invocation in the `messages` stream.
+
+## Any LLM (custom streaming)
+
+```python
+def call_custom_llm(state):
+    writer = get_stream_writer()
+    for token in my_custom_client.stream(...):
+        writer({"token": token})
+    return {"result": "..."}
+
+# Stream with custom mode
 for chunk in graph.stream(inputs, stream_mode="custom", version="v2"):
     if chunk["type"] == "custom":
-        print(chunk["data"]["status"])
+        print(chunk["data"]["token"], end="")
 ```
 
-`get_stream_writer()` works in nodes and tools. In async code on Python < 3.11,
-add a `writer: StreamWriter` parameter to the node instead. Source: `docs/streaming.md`.
+## Subgraph streaming
 
-### Multiple modes at once
-```python
-for chunk in graph.stream(inputs, stream_mode=["updates", "custom"], version="v2"):
-    if chunk["type"] == "updates":
-        ...
-    elif chunk["type"] == "custom":
-        ...
-```
-
-### Subgraph output
 ```python
 for chunk in graph.stream(inputs, subgraphs=True, stream_mode="updates", version="v2"):
-    # chunk["ns"] is () for root, ("node_name:uuid",) for subgraph
-    if chunk["ns"]:
-        print(f"Subgraph {chunk['ns']}: {chunk['data']}")
+    print(chunk["type"])   # "updates"
+    print(chunk["ns"])     # () for root; ("node_name:uuid",) for subgraph
+    print(chunk["data"])
 ```
 
-## Omit model tokens
-
-Tag a model call with `"nostream"` to exclude its tokens from `messages` mode
-(the call still runs and produces output):
+## v2 invoke return type
 
 ```python
-internal_model = ChatAnthropic(...).with_config({"tags": ["nostream"]})
+from langgraph.types import GraphOutput
+
+result = graph.invoke(inputs, version="v2")
+assert isinstance(result, GraphOutput)
+result.value        # your output (dict, Pydantic model, dataclass)
+result.interrupts   # tuple[Interrupt, ...]; empty if no interrupts
 ```
 
-Source: `docs/streaming.md`.
+With Pydantic/dataclass state + v2 `values` mode, `chunk["data"]` is coerced to the
+correct model instance automatically.
 
-## v2 invoke format
+## Disable streaming for specific models
 
-`invoke(..., version="v2")` returns `GraphOutput`:
 ```python
-result = graph.invoke(inputs, config=config, version="v2")
-result.value       # the output state / return value
-result.interrupts  # tuple[Interrupt, ...]; empty if none occurred
+model = init_chat_model("o1-preview", streaming=False)
+# Fallback for models that don't support 'streaming' param:
+model = ChatOpenAI(model="o1-preview", disable_streaming=True)
 ```
 
-Dict-style access (`result["key"]`) still works but is deprecated in v2.
-Source: `docs/streaming.md`.
+## Python < 3.11 async LLM streaming
 
-## v1 vs v2 format comparison
+Must pass `config` explicitly to `ainvoke()`:
 
-| Scenario | v1 (default) | v2 (`version="v2"`) |
-|----------|-------------|---------------------|
-| Single stream mode | Raw data dict | `StreamPart` dict |
-| Multiple stream modes | `(mode, data)` tuples | Same `StreamPart`, filter on `type` |
-| Subgraph streaming | `(namespace, data)` tuples | Same `StreamPart`, check `ns` |
-| `invoke()` return type | Plain dict | `GraphOutput` with `.value` and `.interrupts` |
-
-## Python < 3.11 async
-
-Pass `RunnableConfig` explicitly to `ainvoke()` calls for messages mode to work.
-Use `writer: StreamWriter` parameter instead of `get_stream_writer()` for
-custom mode. Source: `docs/streaming.md`.
+```python
+async def call_model(state, config):
+    response = await model.ainvoke(messages, config)  # config propagates callbacks
+    return {"messages": [response]}
+```
