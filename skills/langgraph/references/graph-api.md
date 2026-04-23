@@ -1,68 +1,71 @@
 # Graph API
 
-StateGraph is the core primitive. Nodes are Python functions; edges are
-routing rules. Compile before invoking.
+Source: `docs/graph-api.md`, `docs/quickstart.md`, `docs/thinking-in-langgraph.md`
 
-## Minimal example
+## Core model
+
+Graphs execute in discrete **super-steps**. All nodes scheduled for a step run
+(potentially in parallel); a checkpoint is written at the boundary. The graph
+terminates when all nodes are inactive and no messages are in transit.
+
+Three components:
+1. **State** — shared data structure, a TypedDict or Pydantic model.
+2. **Nodes** — Python functions that receive state and return a dict of updates.
+3. **Edges** — fixed or conditional routes between nodes.
+
+## StateGraph lifecycle
 
 ```python
 from langgraph.graph import StateGraph, START, END
-from typing_extensions import TypedDict
 
-class State(TypedDict):
-    value: str
-
-def my_node(state: State) -> dict:
-    return {"value": state["value"].upper()}
-
-graph = (
-    StateGraph(State)
-    .add_node("my_node", my_node)
-    .add_edge(START, "my_node")
-    .add_edge("my_node", END)
-    .compile()
-)
-
-result = graph.invoke({"value": "hello"})
+builder = StateGraph(MyState)
+builder.add_node("node_a", node_a_fn)
+builder.add_edge(START, "node_a")
+builder.add_edge("node_a", END)
+graph = builder.compile()          # MUST compile before use
 ```
+
+`compile()` validates structure (no orphan nodes) and is where you attach
+checkpointers and breakpoints. Source: `docs/graph-api.md`.
 
 ## Nodes
 
-A node is any callable: `fn(state) -> partial_state_dict`. It can also accept
-`config: RunnableConfig` (second argument) and `runtime: Runtime[Context]`
-(third argument, or as a named parameter).
+A node is any Python function (sync or async):
 
 ```python
-from langgraph.runtime import Runtime
-
-def node_with_context(state: State, runtime: Runtime[MyContext]) -> dict:
-    user_id = runtime.context.user_id
-    return {"result": f"Hello {user_id}"}
+def my_node(state: State) -> dict:
+    return {"key": "value"}  # partial update — only changed keys required
 ```
 
-Nodes return only the keys they changed — not the full state.
+Optional second/third parameters injected by LangGraph at runtime:
+- `config: RunnableConfig` — thread_id, tags, tracing metadata.
+- `runtime: Runtime[ContextSchema]` — context, store, stream_writer, execution_info.
+
+When `add_node` is called without a name, the function name becomes the node name.
+
+### Node caching
+
+Nodes can cache results by input. Attach `cache_policy=CachePolicy(ttl=N)` when
+adding the node and pass `cache=InMemoryCache()` (or another implementation) to
+`compile()`. Cached hits are marked `__metadata__: {"cached": True}` in stream
+output. Source: `docs/graph-api.md`.
 
 ## Edges
 
-```python
-# Unconditional: always go A -> B
-graph.add_edge("a", "b")
+| Method | Behaviour |
+|--------|-----------|
+| `add_edge(src, dst)` | Always route src → dst |
+| `add_conditional_edges(src, fn)` | fn(state) returns node name or list of names |
+| `add_conditional_edges(src, fn, mapping)` | fn return value mapped through dict to node names |
+| `add_edge(START, "node")` | Entry point |
+| `add_conditional_edges(START, fn)` | Conditional entry |
 
-# Conditional: router_fn(state) -> node_name (or list of names)
-graph.add_conditional_edges("a", router_fn)
+Multiple outgoing edges from a node cause **parallel execution** in the next
+super-step. Source: `docs/graph-api.md`.
 
-# With explicit mapping of return values to node names
-graph.add_conditional_edges("a", router_fn, {True: "b", False: "c"})
+## Command — combine routing and state update
 
-# Fan-out: return a list -> all run in parallel (same superstep)
-graph.add_conditional_edges("a", lambda s: ["b", "c"])
-```
-
-Multiple outgoing edges from the same node run in parallel in the next superstep.
-
-## Command — combine routing and state updates in one step
-
-Return `Command` from a node to update state AND route simultaneously:
+Return `Command` from a node to update state **and** route in one step:
 
 ```python
 from langgraph.types import Command
@@ -70,106 +73,107 @@ from typing import Literal
 
 def my_node(state: State) -> Command[Literal["next_node"]]:
     return Command(
-        update={"foo": "bar"},   # state update
-        goto="next_node"         # routing
+        update={"key": "value"},
+        goto="next_node"
     )
 ```
 
-Use `Command` when you need both. Use conditional edges when routing only.
+`Command` parameters:
+- `update` — state dict, applied through reducers.
+- `goto` — node name(s) to route to (adds dynamic edges; static `add_edge` edges still fire).
+- `graph=Command.PARENT` — navigate from subgraph node to parent graph.
+- `resume` — **only** valid as input to `invoke()`/`stream()` after an `interrupt()`.
 
-`Command(goto=..., graph=Command.PARENT)` navigates from a subgraph node
-to a node in the parent graph.
+Use `Command` when you need both state update and routing. Use conditional edges
+when routing only. Source: `docs/graph-api.md`.
 
-**Warning:** `Command(update=...)` as input to `invoke()` is wrong for
-multi-turn conversations — pass a plain dict instead. `Command(resume=...)`
-as invoke input is the only correct use (for resuming after an interrupt).
+## Send — dynamic fan-out (map-reduce)
 
-## Send — map-reduce fan-out with different state per branch
+When the number of parallel branches is not known ahead of time, return `Send`
+objects from a conditional edge:
 
 ```python
 from langgraph.types import Send
 
-def fan_out(state: OverallState):
-    # Each Send creates a separate branch with its own state
-    return [Send("worker_node", {"item": item}) for item in state["items"]]
+def fanout_edge(state: OverallState):
+    return [Send("process_item", {"item": x}) for x in state["items"]]
 
-graph.add_conditional_edges("splitter", fan_out)
+builder.add_conditional_edges("generator", fanout_edge)
 ```
 
-## Compile
+Each `Send(node_name, state)` routes a separate copy of state to the named node.
+Source: `docs/graph-api.md`.
+
+## Multiple schemas
+
+A graph can have separate input/output schemas (subsets of OverallState) and
+private internal schemas:
 
 ```python
-graph = builder.compile(
-    checkpointer=checkpointer,   # required for persistence + interrupts
-    store=store,                 # optional: cross-thread memory store
-    interrupt_before=["node_a"], # optional: static breakpoints (debugging)
-    interrupt_after=["node_b"],  # optional: static breakpoints (debugging)
+builder = StateGraph(
+    OverallState,
+    input_schema=InputState,
+    output_schema=OutputState
 )
 ```
 
-Compile does basic structural validation (orphan nodes, missing edges).
+Nodes can write to any channel defined across all schemas, even if the channel
+is not in their declared input type. Source: `docs/graph-api.md`.
 
 ## Runtime context
 
-Pass side-channel data to nodes without putting it in state:
+Pass dependency injection data that is not part of graph state:
 
 ```python
 from dataclasses import dataclass
+from langgraph.runtime import Runtime
 
 @dataclass
-class Context:
-    user_id: str
-    db_url: str
+class Ctx:
+    llm_provider: str
 
-graph = StateGraph(State, context_schema=Context).compile(...)
-graph.invoke(inputs, context={"user_id": "u1", "db_url": "..."})
+builder = StateGraph(State, context_schema=Ctx)
+graph = builder.compile()
+graph.invoke(inputs, context={"llm_provider": "anthropic"})
+
+def my_node(state: State, runtime: Runtime[Ctx]):
+    llm = get_llm(runtime.context.llm_provider)
 ```
+
+Source: `docs/graph-api.md`.
 
 ## Recursion limit
 
-Default is 1000 supersteps (since v1.0.6). Override at runtime:
+Default is 1000 super-steps. Set per-invocation via top-level config (not
+inside `configurable`):
 
 ```python
 graph.invoke(inputs, config={"recursion_limit": 50})
 ```
 
-Note: `recursion_limit` goes at the top level of config, not inside
-`configurable`. Raises `GraphRecursionError` when exceeded.
+Use `RemainingSteps` managed value in state for proactive graceful degradation.
+Reactive option: catch `GraphRecursionError` externally. Source: `docs/graph-api.md`.
 
-Use `RemainingSteps` managed value to detect approaching limit inside nodes:
+## Graph migrations
 
-```python
-from langgraph.managed import RemainingSteps
-from typing import Annotated
+When using a checkpointer, graph topology changes are safe for threads that
+have reached END. For interrupted threads, renaming/removing nodes that the
+thread would re-enter is unsupported. Adding/removing state keys has full
+forward/backward compatibility; renaming keys loses saved values for that key.
+Source: `docs/graph-api.md`.
 
-class State(TypedDict):
-    remaining_steps: RemainingSteps  # auto-populated by LangGraph
-```
+## Retry policies
 
-## Node caching
-
-```python
-from langgraph.cache.memory import InMemoryCache
-from langgraph.types import CachePolicy
-
-builder.add_node("expensive", fn, cache_policy=CachePolicy(ttl=60))
-graph = builder.compile(cache=InMemoryCache())
-```
-
-Cached results are marked with `__metadata__: {cached: True}` in updates mode.
-
-## Multiple schemas
-
-Nodes can declare input and output schemas independently. A node can write
-to any channel in the graph's union of schemas, even if its declared input
-schema is narrower:
+Attach per-node retry logic:
 
 ```python
-StateGraph(OverallState, input_schema=InputState, output_schema=OutputState)
+from langgraph.types import RetryPolicy
+
+builder.add_node(
+    "api_call",
+    api_call_fn,
+    retry_policy=RetryPolicy(max_attempts=3, initial_interval=1.0)
+)
 ```
 
-## Graph migrations with checkpointers
-
-- Rename/remove nodes: safe for finished threads; risky for interrupted ones.
-- Add/remove state keys: fully backwards and forwards compatible.
-- Rename state keys: existing threads lose that key's saved value.
+Source: `docs/thinking-in-langgraph.md`.

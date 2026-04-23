@@ -1,85 +1,79 @@
 ---
 name: langgraph
 description: >
-  Build, debug, and extend stateful agent graphs with LangGraph v1+.
-  Use when code imports langgraph, mentions StateGraph, checkpointer,
-  interrupt, streaming modes, or prebuilt agents. Covers graph API,
-  state/reducers, persistence, human-in-the-loop interrupts, streaming,
-  and when to prefer the Functional API instead.
+  Build stateful, long-running agent workflows with LangGraph v1 (Python).
+  Use when constructing a StateGraph with nodes and edges, wiring up checkpointers
+  for persistence or human-in-the-loop, calling interrupt() for approval workflows,
+  streaming graph output token-by-token or step-by-step, or choosing between the
+  Graph API and Functional API (@entrypoint / @task).
+  Triggers: "StateGraph", "langgraph graph", "checkpointer", "interrupt approve",
+  "stream_mode langgraph", "create_react_agent".
+  SKIP: pure LangChain chains without graph structure; generic Python async; LangSmith
+  tracing setup (use langfuse-tracing skill); non-LangGraph orchestrators.
 ---
 
-# LangGraph Skill
+# LangGraph v1 Skill
 
-LangGraph models agent workflows as graphs where nodes do work and edges
-control routing. State is persisted as checkpoints, which enables
-human-in-the-loop, memory, time travel, and fault tolerance.
-
-## Problem
-
-LangGraph v1 reorganised its API surface significantly. Common failures:
-
-- Wrong state update semantics (overwrite vs. accumulate via reducers)
-- Missing checkpointer — persistence and interrupts silently do nothing
-- Forgetting `thread_id` in config when using a checkpointer
-- Wrapping `interrupt()` in bare `try/except`, swallowing the exception
-- Non-idempotent side effects before `interrupt()` double-executing on resume
-- Using `Command(update=...)` as invoke input instead of plain dict for
-  multi-turn conversations (graph appears stuck)
-- Skipping `version="v2"` on stream — format changes unpredictably with
-  multiple modes or subgraphs
-
-## Trigger keywords
-
-`StateGraph`, `langgraph`, `checkpointer`, `interrupt`, `create_react_agent`,
-`stream_mode`
+LangGraph is a low-level orchestration framework for stateful, long-running,
+agent workflows. It models execution as a directed graph: **nodes** are Python
+functions that do work and **edges** route between them based on state.
+Source: `docs/overview.md`, `docs/graph-api.md`.
 
 ## When to invoke
 
-- Code imports `langgraph` or `from langgraph.*`
-- User asks about StateGraph, nodes, edges, conditional routing
-- User asks about checkpointing, thread-level memory, or cross-thread memory
-- User asks about human-in-the-loop, approval flows, or pausing graphs
-- User asks about streaming from an agent graph (token streaming, updates)
-- User asks about `create_react_agent` or prebuilt agents
+- Building or debugging a `StateGraph` (nodes, edges, state schema, reducers).
+- Adding persistence / conversation memory via a checkpointer.
+- Implementing human-in-the-loop with `interrupt()` / `Command(resume=...)`.
+- Choosing or converting between the Graph API and Functional API.
+- Streaming graph output (`stream_mode="updates"`, `"messages"`, `"custom"`, etc.).
+- Using `create_react_agent` or other prebuilt agent factories.
 
-## When NOT to invoke
+## Skip rules
 
-- Simple LangChain chain with no graph state (`chain.invoke(...)` only)
-- Non-graph agent pipelines (raw LLM + tool loop with no StateGraph)
-- LangSmith tracing questions with no graph involvement — use
-  langfuse-tracing or LangSmith docs instead
+- LangChain LCEL chains or runnables with no `StateGraph` — no graph needed.
+- Pure Python `asyncio` pipelines with no LangGraph imports.
+- LangSmith / Langfuse observability setup — use the `langfuse-tracing` skill.
+- Simple sequential scripts where `invoke` on a single model is sufficient.
+
+## API choice
+
+Two APIs share the same runtime; pick one and mix freely.
+
+| Need | API |
+|------|-----|
+| Visual graph, explicit shared state, parallel fan-out | Graph API (`StateGraph`) |
+| Minimal boilerplate, standard Python control flow, function-scoped state | Functional API (`@entrypoint` / `@task`) |
+
+Full comparison: `references/functional-api.md`. Source: `docs/choosing-apis.md`.
 
 ## References map
 
-Load each file only when the user's question touches that area:
+Open the relevant file for detail; each is under `references/`.
 
-| File | Load when |
-|------|-----------|
-| `references/graph-api.md` | StateGraph, nodes, edges, Command, Send, compile |
-| `references/state.md` | TypedDict / Pydantic state, reducers, MessagesState, channels |
-| `references/persistence.md` | Checkpointers, threads, get_state, update_state, time travel |
-| `references/interrupts.md` | interrupt(), resume, human-in-the-loop, approval workflows |
-| `references/streaming.md` | stream_mode, version="v2", get_stream_writer, custom events |
-| `references/agents-prebuilt.md` | create_react_agent, when to drop to raw graphs |
-| `references/functional-api.md` | @entrypoint / @task, when Functional API beats Graph API |
-
-## Quick orientation
-
-```
-StateGraph(State)          # declare schema + reducers
-  .add_node("name", fn)   # fn(state) -> partial state dict
-  .add_edge("a", "b")     # unconditional
-  .add_conditional_edges("a", router_fn)  # fn(state) -> node name
-  .compile(checkpointer=..., store=...)   # required before invoke
-```
-
-Always pass `{"configurable": {"thread_id": "..."}}` as `config` when
-using a checkpointer. Without it the checkpointer cannot save or load state.
+| File | Covers |
+|------|--------|
+| `graph-api.md` | StateGraph, nodes, edges, `Command`, `Send`, recursion limit |
+| `state.md` | TypedDict / Pydantic state, reducers, `MessagesState`, `add_messages` |
+| `persistence.md` | Checkpointers, threads, `get_state`, `update_state`, Store (cross-thread memory) |
+| `interrupts.md` | `interrupt()`, `Command(resume=...)`, rules, common patterns |
+| `streaming.md` | Stream modes (`values`, `updates`, `messages`, `custom`, `debug`), v2 format |
+| `functional-api.md` | `@entrypoint`, `@task`, determinism, short-term memory |
+| `agents-prebuilt.md` | `create_react_agent`, tool binding, prebuilt patterns |
 
 ## Anti-recommendations
 
-- Do not snapshot pinned API paths. Defer to the official docs via the
-  `claude-docs` skill for anything not covered in these references.
-- Do not recommend LangSmith as required — it is optional observability.
-- Do not conflate `InMemorySaver` (dev only) with production checkpointers
-  (`PostgresSaver`, `SqliteSaver`). `InMemorySaver` loses state on restart.
+- Do not wrap `interrupt()` in a bare `try/except` — it pauses by raising an
+  exception that must propagate. Source: `docs/interrupts.md`.
+- Do not use `Command(update=...)` as input to `invoke()` for multi-turn
+  conversations — pass a plain dict instead. `Command(resume=...)` is the only
+  `Command` pattern valid as `invoke()` input. Source: `docs/graph-api.md`.
+- Do not call a `@task` directly from application code — tasks must be called
+  from within an `@entrypoint`, another `@task`, or a graph node.
+  Source: `docs/functional-api.md`.
+- Do not reorder `interrupt()` calls within a node across executions — matching
+  is strictly index-based, so changing order mis-routes resume values.
+  Source: `docs/interrupts.md`.
+- `interrupt()` payloads must be JSON-serializable — no functions, class
+  instances, or non-serializable objects. Source: `docs/interrupts.md`.
+- `recursion_limit` is a top-level config key, not under `configurable`.
+  Source: `docs/graph-api.md`.
