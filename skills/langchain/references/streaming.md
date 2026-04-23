@@ -1,132 +1,189 @@
 # Streaming
 
-LangChain v1 provides two streaming surfaces: `.stream()` / `.astream()`
-for raw output chunks, and `.astream_events()` for structured event streams
-that carry source metadata.
+Source: `docs/streaming.md`, `docs/messages.md`
 
-## Basic token streaming
+## Overview
+
+Streaming surfaces real-time output from agent runs. All streaming goes through
+`agent.stream()` or `agent.astream()`. The recommended format is `version="v2"`,
+which requires `langgraph>=1.1`.
+
+## Stream modes
+
+Pass one or more modes as `stream_mode`:
+
+| Mode | What it emits |
+|------|--------------|
+| `"updates"` | Full state after each agent step (one event per node) |
+| `"messages"` | `(token, metadata)` tuples from every LLM call as tokens arrive |
+| `"custom"` | Arbitrary data emitted by tools/middleware via `get_stream_writer` |
+
+Combine modes: `stream_mode=["messages", "updates"]`.
+
+## v2 streaming format
+
+With `version="v2"`, every chunk is a `StreamPart` dict:
 
 ```python
-# Sync
-for chunk in chain.stream({"question": "Explain quantum entanglement."}):
-    print(chunk, end="", flush=True)
-
-# Async
-async for chunk in chain.astream({"question": "..."}):
-    print(chunk, end="", flush=True)
+{"type": "updates" | "messages" | "custom", "ns": [...], "data": <payload>}
 ```
 
-What `chunk` contains depends on the last step in the chain:
-- After a chat model: `AIMessageChunk`
-- After `StrOutputParser`: a `str` fragment
-- After `JsonOutputParser`: a partial dict (may be invalid JSON mid-stream)
+Without `version="v2"`, multi-mode streams yield `(mode, data)` tuples — less
+convenient to dispatch.
 
-## astream_events (v2)
-
-`astream_events` is the recommended pattern for UI integration. It emits
-structured events for every step in the chain, not just the final output.
+## Stream agent progress (updates mode)
 
 ```python
-async for event in chain.astream_events(input, version="v2"):
-    kind = event["event"]
-    name = event["name"]
-
-    if kind == "on_chat_model_stream":
-        chunk = event["data"]["chunk"]          # AIMessageChunk
-        print(chunk.content, end="", flush=True)
-
-    elif kind == "on_tool_start":
-        print(f"\n[Calling tool: {name}]")
-
-    elif kind == "on_chain_end":
-        pass                                     # chain finished
+for chunk in agent.stream(
+    {"messages": [{"role": "user", "content": "..."}]},
+    stream_mode="updates",
+    version="v2",
+):
+    if chunk["type"] == "updates":
+        for step_name, step_data in chunk["data"].items():
+            last = step_data["messages"][-1]
+            print(f"{step_name}: {last.content_blocks}")
 ```
 
-Always pass `version="v2"`. The v1 event schema is deprecated.
+A single tool call produces three update events: model node (AIMessage with
+tool_call), tools node (ToolMessage with result), model node (final AIMessage).
 
-## Key event types
-
-| Event name | When it fires |
-|-----------|--------------|
-| `on_chat_model_start` | LLM call begins |
-| `on_chat_model_stream` | Each token chunk |
-| `on_chat_model_end` | LLM call finished |
-| `on_chain_start` | Any chain / LCEL step starts |
-| `on_chain_end` | Any chain / LCEL step ends |
-| `on_tool_start` | Tool invocation begins |
-| `on_tool_end` | Tool invocation finished |
-| `on_retriever_start` | Retriever query begins |
-| `on_retriever_end` | Retriever query finished |
-
-Filter by `event["name"]` to isolate specific components, e.g.:
+## Stream LLM tokens (messages mode)
 
 ```python
-if event["event"] == "on_chat_model_stream" and event["name"] == "my_llm":
+for chunk in agent.stream(
+    {"messages": [{"role": "user", "content": "..."}]},
+    stream_mode="messages",
+    version="v2",
+):
+    if chunk["type"] == "messages":
+        token, metadata = chunk["data"]
+        # metadata["langgraph_node"] — which node emitted this token
+        for block in token.content_blocks:
+            if block["type"] == "text":
+                print(block["text"], end="")
+```
+
+## Stream reasoning tokens
+
+Filter `content_blocks` for `type == "reasoning"`. Works the same regardless
+of provider — LangChain normalises Anthropic `thinking` blocks and OpenAI
+reasoning summaries into the standard `"reasoning"` type.
+
+```python
+from langchain.messages import AIMessageChunk
+
+for chunk in agent.stream(
+    {"messages": [{"role": "user", "content": "..."}]},
+    stream_mode="messages",
+    version="v2",
+):
+    if chunk["type"] == "messages":
+        token, _ = chunk["data"]
+        if not isinstance(token, AIMessageChunk):
+            continue
+        for block in token.content_blocks:
+            if block["type"] == "reasoning":
+                print(f"[thinking] {block['reasoning']}", end="")
+            elif block["type"] == "text":
+                print(block["text"], end="")
+```
+
+Reasoning output must be enabled on the model (e.g., `thinking={"type": "enabled",
+"budget_tokens": 5000}` for `ChatAnthropic`).
+
+## Emit custom updates from tools
+
+```python
+from langgraph.config import get_stream_writer
+
+def long_task(item: str) -> str:
+    """Process an item."""
+    writer = get_stream_writer()
+    writer(f"Processing: {item}")
+    # ... do work ...
+    writer(f"Done: {item}")
+    return "result"
+```
+
+Consume with `stream_mode="custom"`:
+
+```python
+for chunk in agent.stream(..., stream_mode="custom", version="v2"):
+    if chunk["type"] == "custom":
+        print(chunk["data"])
+```
+
+Note: `get_stream_writer` inside a tool means the tool cannot be called outside
+a LangGraph execution context. Alternatively, access via `runtime.stream_writer`
+in `ToolRuntime`.
+
+## Stream tool calls and completed messages together
+
+```python
+for chunk in agent.stream(
+    {"messages": [input_msg]},
+    stream_mode=["messages", "updates"],
+    version="v2",
+):
+    if chunk["type"] == "messages":
+        token, metadata = chunk["data"]
+        if isinstance(token, AIMessageChunk):
+            # token.text for text, token.tool_call_chunks for partial tool calls
+            print(token.text, end="")
+    elif chunk["type"] == "updates":
+        for source, update in chunk["data"].items():
+            if source == "tools":
+                last = update["messages"][-1]
+                print(f"Tool result: {last.content_blocks}")
+```
+
+Use `token.chunk_position == "last"` to detect when a complete tool call has
+been assembled during `"messages"` streaming.
+
+## Human-in-the-loop interrupts during streaming
+
+Interrupts appear in `"updates"` chunks as `source == "__interrupt__"`:
+
+```python
+interrupts = []
+for chunk in agent.stream(..., stream_mode=["messages", "updates"], version="v2"):
+    if chunk["type"] == "updates":
+        for source, update in chunk["data"].items():
+            if source == "__interrupt__":
+                interrupts.extend(update)
+```
+
+Resume with `Command(resume=decisions)`:
+
+```python
+for chunk in agent.stream(
+    Command(resume=decisions),
+    config=config,
+    stream_mode=["messages", "updates"],
+    version="v2",
+):
     ...
 ```
 
-Assign names via `llm = ChatOpenAI(...).with_config({"run_name": "my_llm"})`.
+## Multi-agent streaming
 
-## Streaming from agents (LangGraph)
+Set `name="agent_name"` on each `create_agent` call. Use `subgraphs=True` in
+`stream()`. Disambiguate by `metadata["lc_agent_name"]` in `"messages"` chunks.
 
-LangGraph streams at the graph level. Prefer `astream_events` over
-`astream` when you need token-level output from inside nodes:
-
-```python
-async for event in graph.astream_events(input, version="v2"):
-    if event["event"] == "on_chat_model_stream":
-        print(event["data"]["chunk"].content, end="", flush=True)
-```
-
-For state-level streaming (graph step outputs), use `graph.astream()`:
+## v2 invoke
 
 ```python
-async for state_update in graph.astream(input):
-    print(state_update)   # dict of node outputs per step
+result = agent.invoke({"messages": [...]}, version="v2")
+result.value       # dict with messages, structured_response, etc.
+result.interrupts  # tuple of Interrupt objects (empty if none)
 ```
 
-## UI integration patterns
-
-**SSE (Server-Sent Events) with FastAPI:**
+## Disable streaming for a model
 
 ```python
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from langchain_openai import ChatOpenAI
 
-app = FastAPI()
-
-@app.post("/stream")
-async def stream_endpoint(body: dict):
-    async def generate():
-        async for chunk in chain.astream(body):
-            yield f"data: {chunk}\n\n"
-    return StreamingResponse(generate(), media_type="text/event-stream")
+model = ChatOpenAI(model="gpt-4o", streaming=False)
+# or use disable_streaming=True (available on all BaseChatModel)
 ```
-
-**WebSocket:**
-
-```python
-@app.websocket("/ws")
-async def ws_endpoint(websocket):
-    await websocket.accept()
-    data = await websocket.receive_json()
-    async for chunk in chain.astream(data):
-        await websocket.send_text(chunk)
-```
-
-## Common traps
-
-- **Breaking out of the stream iterator early** — if you `break` from
-  `astream()` before the iterator is exhausted, the underlying HTTP
-  connection may not be closed cleanly. Use `aclose()` if you need to abort.
-- **`astream_events` with sync runnables** — `astream_events` requires every
-  step to support async. A `RunnableLambda` wrapping a sync function is fine;
-  a blocking I/O call inside will stall the event loop.
-- **Structured output + streaming** — `with_structured_output` buffers the
-  full response before parsing. Do not expect partial parsed objects from
-  `.stream()` on a structured-output chain.
-- **Missing `version="v2"`** — omitting the version argument uses v1 events,
-  which have a different schema and are deprecated. Always pass `version="v2"`.
-- **Token counts in streaming** — usage metadata (token counts) is typically
-  only available in the final chunk or in the `on_chat_model_end` event, not
-  in intermediate chunks.

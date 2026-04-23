@@ -1,115 +1,141 @@
 # Structured Output
 
-LangChain v1 unifies structured output behind a single method:
-`llm.with_structured_output(schema)`. The method selects the best
-available extraction mechanism for the underlying provider.
+Source: `docs/structured-output.md`, `docs/agents.md`
 
-## The canonical pattern
+Structured output from agents is controlled via the `response_format` parameter
+on `create_agent`. The result is in `result["structured_response"]`.
+
+For structured output directly from a model (without an agent), use
+`model.with_structured_output(schema)` — see the models docs.
+
+## Choosing a strategy
+
+```
+response_format=MySchema    →  auto: ProviderStrategy if supported, else ToolStrategy
+response_format=ProviderStrategy(MySchema)  →  native JSON from provider
+response_format=ToolStrategy(MySchema)      →  tool calling for output
+```
+
+When passing a schema type directly, LangChain reads model profile data
+(`langchain>=1.1`) to select the best strategy automatically.
+
+## Supported schema types (both strategies)
+
+- Pydantic `BaseModel` — returns validated instance
+- Python `dataclass` — returns dict
+- `TypedDict` — returns dict
+- JSON Schema dict — returns dict
+- `Union` of the above (ToolStrategy only) — model picks the matching schema
+
+## ProviderStrategy
 
 ```python
+from langchain.agents.structured_output import ProviderStrategy
 from pydantic import BaseModel, Field
-from langchain_openai import ChatOpenAI
 
-class CalendarEvent(BaseModel):
-    name: str = Field(description="Name of the event")
-    date: str = Field(description="ISO 8601 date string")
-    participants: list[str] = Field(description="List of participant names")
+class Report(BaseModel):
+    summary: str = Field(description="One-sentence summary")
+    confidence: float = Field(description="0.0 to 1.0")
 
-llm = ChatOpenAI(model="gpt-4o-mini")
-structured_llm = llm.with_structured_output(CalendarEvent)
+agent = create_agent(
+    model="openai:gpt-4o",
+    response_format=ProviderStrategy(Report),
+    # strict=True  # optional, OpenAI and xAI only (langchain>=1.2)
+)
 
-event = structured_llm.invoke("Alice and Bob are meeting on 2026-05-01.")
-# event is a CalendarEvent instance
-print(event.name, event.date)
+result = agent.invoke({"messages": [{"role": "user", "content": "Analyse this..."}]})
+report: Report = result["structured_response"]
 ```
 
-## Schema options
+Providers with native structured output support: OpenAI, Anthropic (Claude),
+Google Gemini, xAI (Grok). Falls back to ToolStrategy if not available.
 
-| Schema type | When to use |
-|-------------|-------------|
-| Pydantic `BaseModel` | Preferred — gives you a typed object with validation |
-| `TypedDict` | Useful when you want a plain dict without Pydantic overhead |
-| JSON Schema dict | When you need to pass a raw schema, e.g. from a config file |
+If you use `response_format=Report` directly (without wrapping in ProviderStrategy),
+behaviour is identical when the model supports native structured output.
 
-Pydantic field `description=` fields are included in the prompt sent to the
-model. Descriptive fields improve extraction accuracy significantly.
+## ToolStrategy
 
-## Provider mechanisms (internal, but good to know when debugging)
-
-| Provider | Default mechanism |
-|----------|------------------|
-| OpenAI (gpt-4o, gpt-4.1, etc.) | Native JSON schema via `response_format` |
-| Anthropic (Claude models) | Tool-based extraction (forces a tool call) |
-| Google (Gemini) | Native JSON schema |
-| Others (Mistral, Groq, etc.) | Tool-based or prompt-based depending on capability |
-
-You do not normally select the mechanism — `with_structured_output` does.
-When debugging, set `include_raw=True` to inspect what the model actually
-returned before parsing.
-
-## `include_raw=True` for debugging
+Works with any model that supports tool calling. The schema is passed as a
+synthetic tool; the model must call it exactly once to produce output.
 
 ```python
-structured_llm = llm.with_structured_output(CalendarEvent, include_raw=True)
-result = structured_llm.invoke("...")
-# result is {"raw": AIMessage(...), "parsed": CalendarEvent(...), "parsing_error": None}
+from langchain.agents.structured_output import ToolStrategy
+from typing import Literal, Union
+from pydantic import BaseModel, Field
 
-if result["parsing_error"]:
-    print("Parse failed:", result["parsing_error"])
-    print("Raw output:", result["raw"].content)
+class ProductReview(BaseModel):
+    rating: int | None = Field(ge=1, le=5)
+    sentiment: Literal["positive", "negative"]
+    key_points: list[str]
+
+agent = create_agent(
+    model="openai:gpt-4o",
+    tools=[search_tool],
+    response_format=ToolStrategy(
+        schema=ProductReview,
+        handle_errors=True,         # default: retry on validation failure
+        tool_message_content=None,  # optional custom confirmation message
+    )
+)
 ```
 
-## When `with_structured_output` fails
+### handle_errors options
 
-Common failure modes and fixes:
+| Value | Behaviour |
+|-------|-----------|
+| `True` (default) | Catch all errors, use default retry message |
+| `False` | All errors propagate, no retry |
+| `str` | Catch all errors, use this fixed retry message |
+| `type[Exception]` | Only catch this type, default message |
+| `tuple[type[Exception], ...]` | Only catch these types |
+| `Callable[[Exception], str]` | Custom handler returns retry message |
 
-| Symptom | Likely cause | Fix |
-|---------|-------------|-----|
-| `ValidationError` on a required field | Model omitted a field | Add `Field(description=...)` to clarify; or make the field `Optional` with a default |
-| Empty / null values | Ambiguous schema or underspecified prompt | Add more context to the `description=` or to the system prompt |
-| `OutputParserException` | Model returned invalid JSON (prompt-based fallback) | Switch to a model that supports native tool / JSON modes |
-| `NotImplementedError` | Provider does not support this schema type | Use `TypedDict` or raw JSON schema instead of Pydantic |
-| Schema too large → truncated | Very deeply nested model | Flatten the schema; avoid circular references |
-
-## Tool-based extraction (manual alternative)
-
-For multi-step extractions or when you need the tool-call metadata:
+Error types to catch: `StructuredOutputValidationError` (schema mismatch),
+`MultipleStructuredOutputsError` (model called the tool more than once).
 
 ```python
-from langchain_core.tools import tool
+from langchain.agents.structured_output import (
+    StructuredOutputValidationError,
+    MultipleStructuredOutputsError,
+)
 
-@tool
-def extract_event(name: str, date: str, participants: list[str]) -> str:
-    """Extract a calendar event from text."""
-    return f"{name} on {date}"
-
-llm_with_tools = llm.bind_tools([extract_event])
-msg = llm_with_tools.invoke("Alice and Bob meet on 2026-05-01.")
-print(msg.tool_calls)  # [{"name": "extract_event", "args": {...}}]
+def my_error_handler(error: Exception) -> str:
+    if isinstance(error, StructuredOutputValidationError):
+        return "Format error, please retry."
+    elif isinstance(error, MultipleStructuredOutputsError):
+        return "Return exactly one structured response."
+    return f"Error: {error}"
 ```
 
-Use this when you need to control when the tool is called, or when you
-want to keep the raw `AIMessage` alongside the parsed result.
+### Union schemas
 
-## Partial / streaming structured output
+When the output can be one of several types, pass a `Union`:
 
-Some providers support streaming partial JSON; most do not. Do not rely on
-structured output being streamable. Buffer the full response, then parse.
-If you need streaming tokens AND structured output in the same pipeline,
-stream the text and parse the complete string at the end.
+```python
+agent = create_agent(
+    model,
+    response_format=ToolStrategy(Union[ProductReview, CustomerComplaint])
+)
+```
 
-## Common traps
+The model chooses the appropriate schema based on context.
 
-- **Nested Pydantic models** — deeply nested schemas sometimes cause
-  Anthropic's tool-extraction mechanism to hallucinate missing inner fields.
-  Flatten one level when debugging unexpected nulls.
-- **`Optional` without a default** — `Optional[str]` with no `= None`
-  default will still fail validation if the model omits the field. Always
-  pair `Optional` with `= None`.
-- **Reusing a Pydantic model name** — if two models share the same class
-  name (e.g. both called `Output`), JSON schema de-duplication can silently
-  merge them. Use unique class names.
-- **`with_structured_output` on a chain, not just the LLM** — the method
-  lives on the `BaseChatModel`, not on a composed chain. Apply it before
-  chaining: `structured_llm = llm.with_structured_output(Schema)`, then
-  `chain = prompt | structured_llm`.
+## Custom tool_message_content
+
+Controls what appears in the conversation history after the structured tool call:
+
+```python
+ToolStrategy(
+    schema=Report,
+    tool_message_content="Report captured successfully.",
+)
+```
+
+Without this, the default message is `"Returning structured response: {...}"`.
+
+## State schema restriction
+
+Custom state schemas (`state_schema`) must be `TypedDict` subclasses of
+`AgentState`. Pydantic models and dataclasses are NOT valid for state schemas
+in v1+. This restriction does not apply to `response_format` schemas or tool
+`args_schema` — those still accept Pydantic, dataclass, and TypedDict.
