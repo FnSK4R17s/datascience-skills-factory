@@ -1,17 +1,20 @@
 # Context and Jobs
 
+Sources: `telegram.ext.callbackcontext.rst`, `telegram.ext.contexttypes.rst`,
+`telegram.ext.jobqueue.rst`, `telegram.ext.job.rst`,
+`examples.timerbot.rst`, `examples.contexttypesbot.rst`.
+
 ## CallbackContext
 
-Every handler callback receives `context: ContextTypes.DEFAULT_TYPE`. The
-type alias resolves to `CallbackContext[ExtBot, dict, dict, dict]` but you
-rarely need the generic form unless building custom context types.
+Every handler callback receives `context: ContextTypes.DEFAULT_TYPE`.
+The type alias resolves to `CallbackContext[ExtBot, dict, dict, dict]`.
 
 Key attributes:
 
 | Attribute | Type | Scope | Persisted |
 |-----------|------|-------|-----------|
 | `context.bot` | `Bot` / `ExtBot` | global | N/A |
-| `context.bot_data` | `dict` | all users/chats | yes (if persistence configured) |
+| `context.bot_data` | `dict` | all users/chats | yes (if persistence set) |
 | `context.chat_data` | `dict` | current chat | yes |
 | `context.user_data` | `dict` | current user | yes |
 | `context.args` | `list[str]` | CommandHandler only | no |
@@ -20,14 +23,12 @@ Key attributes:
 | `context.job` | `Job` | job callbacks only | no |
 
 `chat_data` and `user_data` are `None` in handlers that fire without a
-specific chat or user (e.g. a raw `Update` with only `callback_query` and
-no `message`). Guard with `if context.chat_data is not None:`.
+specific chat or user. Guard with `if context.chat_data is not None:`.
 
 ## Storing state
 
 Always store mutable state in the data dicts, not in handler closures or
-module-level globals. The dicts travel through persistence and are safe to
-access across handler invocations.
+module-level globals. The dicts travel through persistence.
 
 ```python
 async def increment(update, context):
@@ -38,10 +39,12 @@ async def increment(update, context):
 
 ## Custom context types
 
-If you need typed `user_data` / `chat_data` / `bot_data`, use `ContextTypes`:
+For typed `user_data` / `chat_data` / `bot_data`, use `ContextTypes`.
+(Source: `telegram.ext.contexttypes.rst`, `examples.contexttypesbot.rst`)
 
 ```python
 from telegram.ext import ContextTypes, CallbackContext
+from typing import TypedDict
 
 class MyUserData(TypedDict):
     count: int
@@ -58,42 +61,38 @@ app = (
 
 ## JobQueue
 
-`JobQueue` lets you schedule coroutines inside the bot's event loop. It is
-included when you install `python-telegram-bot[job-queue]` (requires
-APScheduler). It is enabled by default in `ApplicationBuilder` when the
-dependency is present.
+Schedules coroutines inside the bot's event loop.
+Requires `pip install "python-telegram-bot[job-queue]"` (APScheduler).
+Without it, `app.job_queue` is `None`.
+(Source: `examples.rst` — "Note: To use JobQueue, you must install PTB via
+`pip install "python-telegram-bot[job-queue]"`")
 
 ### Scheduling jobs
 
 ```python
 async def my_handler(update, context):
-    # run once, 60 seconds from now
-    context.job_queue.run_once(
-        callback=notify,
-        when=60,
-        chat_id=update.effective_chat.id,
-        data={"msg": "Reminder!"},
-    )
+    # run once, N seconds from now
+    context.job_queue.run_once(callback=notify, when=60,
+        chat_id=update.effective_chat.id, data={"msg": "Reminder!"})
 
-    # run every 30 seconds
+    # run every N seconds
     context.job_queue.run_repeating(notify, interval=30, first=10)
 
     # run at a specific datetime
-    import datetime
     context.job_queue.run_at(notify, when=datetime.datetime(2026, 6, 1, 9, 0))
 
-    # run on a cron schedule
+    # run on a cron schedule (monthly example)
     context.job_queue.run_monthly(notify, when=datetime.time(8, 0), day=1)
 ```
 
-### Job callback
+### Job callback signature
+
+Job callbacks receive only `context` — not `update`:
 
 ```python
 async def notify(context: ContextTypes.DEFAULT_TYPE) -> None:
-    job = context.job          # the Job object
-    chat_id = job.chat_id
-    data = job.data            # whatever you passed as `data=`
-    await context.bot.send_message(chat_id=chat_id, text=data["msg"])
+    job = context.job
+    await context.bot.send_message(chat_id=job.chat_id, text=job.data["msg"])
 ```
 
 ### Cancelling jobs
@@ -104,20 +103,13 @@ Jobs are named; cancel by name:
 context.job_queue.run_once(notify, when=60, name="my_job")
 
 # later:
-current_jobs = context.job_queue.get_jobs_by_name("my_job")
-for job in current_jobs:
+for job in context.job_queue.get_jobs_by_name("my_job"):
     job.schedule_removal()
 ```
 
-### JobQueue requires the extra
-
-`pip install "python-telegram-bot[job-queue]"` installs APScheduler. Without
-it, `app.job_queue` is `None` and any access raises `AttributeError`.
-
 ## Application-level data access outside handlers
 
-If you need `bot_data` outside a handler (e.g. in startup hooks), access it
-via the application object:
+Access `bot_data` in startup hooks via the application object:
 
 ```python
 async def on_startup(app):

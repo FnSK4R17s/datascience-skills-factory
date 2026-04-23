@@ -1,11 +1,19 @@
 # ConversationHandler
 
+Sources: `telegram.ext.conversationhandler.rst`, `examples.conversationbot.rst`,
+`examples.conversationbot2.rst`, `examples.nestedconversationbot.rst`,
+`examples.persistentconversationbot.rst`, `examples.rst`.
+
 ## Purpose
 
 `ConversationHandler` tracks per-user (or per-chat) state across multiple
 messages. It routes each incoming update to a different callback depending on
 which state the user is currently in. Classic use cases: multi-step forms,
 login wizards, quizzes.
+
+(Source: `examples.rst` — "A common task for a bot is to ask information from
+the user. In v5.0 of this library, we introduced the ConversationHandler for
+that exact purpose.")
 
 ## Anatomy
 
@@ -31,15 +39,13 @@ app.add_handler(conv_handler)
 
 ### Entry points
 
-A list of handlers that can start a new conversation. Each must be a handler
-object (not a callback). When an entry point fires, the conversation begins in
-the state returned by its callback.
+A list of handlers that start a new conversation. When one fires, the
+conversation begins in the state returned by its callback.
 
 ### State callbacks
 
-Each state maps to a list of handlers. The callback for the matched handler
-returns the next state constant, or `ConversationHandler.END` to close the
-conversation.
+Return the next state constant to advance, or `ConversationHandler.END` to
+close the conversation.
 
 ```python
 async def start(update, context) -> int:
@@ -58,67 +64,61 @@ async def cancel(update, context) -> int:
 
 ### Fallbacks
 
-Handlers checked when no state handler matches. Useful for `/cancel` and
-unrecognised input. A fallback that returns `ConversationHandler.END` ends the
-conversation. A fallback that returns a state transitions to that state.
+Checked when no state handler matches. A fallback returning
+`ConversationHandler.END` ends the conversation. A fallback returning a state
+constant transitions to that state.
 
 ## Conversation scope: per-user vs per-chat
 
-By default conversations are per-user in a chat (key = `(chat_id, user_id)`).
-
-Change with `per_user` and `per_chat` parameters:
+Default key is `(chat_id, user_id)`.
 
 | `per_user` | `per_chat` | Key |
 |-----------|-----------|-----|
 | True (default) | True (default) | `(chat_id, user_id)` |
 | False | True | `chat_id` |
 | True | False | `user_id` |
-| False | False | Not valid — raises |
+| False | False | invalid — raises |
 
 ## Known footguns
 
 **Returning nothing from a callback ends the conversation silently.**
-Always return either a state constant or `ConversationHandler.END`. Forgetting
-a `return` statement leaves the user stuck in a dead state.
+Always return a state constant or `ConversationHandler.END`. A missing `return`
+leaves the user in a dead state with no error.
 
 **Entry points fire even in an active conversation by default.**
-Set `allow_reentry=True` to let `/start` restart mid-conversation, or
-`allow_reentry=False` (default) to ignore it. If you leave the default,
-document to users that they must `/cancel` before restarting.
+`allow_reentry=False` (default) ignores re-entry. `allow_reentry=True` lets
+`/start` restart mid-conversation. Document the behavior to users.
 
 **Nested ConversationHandlers are supported but complex.**
-A sub-conversation inside a parent state is possible; states must be unique
-across parent and child or you get silent routing bugs. Keep nesting shallow
-(max one level) unless the complexity is justified.
+States must be unique across parent and child; collisions cause silent routing
+bugs. Keep nesting to one level. (Source: `examples.nestedconversationbot.rst`)
 
 **Inline keyboards in conversations need `CallbackQueryHandler` in the state.**
-If a state is reached by pressing a button, the next update is a
-`callback_query`, not a message. Add `CallbackQueryHandler` to that state's
-handler list; `MessageHandler` will not fire.
+When a state is reached by pressing a button, the next update is a
+`callback_query`, not a message. `MessageHandler` will not fire.
 
-**Persistence and ConversationHandler.**
-When using `PicklePersistence`, conversation state survives restarts only if
-`ConversationHandler` is constructed with `persistent=True` and a `name`
-parameter. Without a name, state is keyed by object identity — lost on restart.
+**Persistence requires `persistent=True` and `name`.**
+Without both, conversation state is keyed by object identity and lost on restart.
 
 ```python
 ConversationHandler(
     ...,
     persistent=True,
-    name="my_conversation",   # stable across restarts
+    name="my_conversation",   # stable string, unique per application
 )
 ```
 
+(Source: `examples.persistentconversationbot.rst`)
+
 **`ConversationHandler.END` vs returning `None`.**
-`END` is `-1`. Returning `None` does the same thing in current PTB versions but
-is undocumented behavior — use the constant.
+`END` is `-1`. Returning `None` has the same effect in current PTB but is
+undocumented — use the constant.
 
-## Timeouts (conversation_timeout)
+## Timeouts
 
-Optional: set `conversation_timeout` (seconds) to automatically end stale
-conversations. Requires the `JobQueue` to be enabled (it is by default when
-PTB-extra requirements are installed).
+Set `conversation_timeout` (seconds) to auto-end stale conversations. Requires
+`JobQueue` to be present (install `python-telegram-bot[job-queue]`).
 
 ```python
-ConversationHandler(..., conversation_timeout=300)  # 5-minute timeout
+ConversationHandler(..., conversation_timeout=300)  # 5-minute idle timeout
 ```
