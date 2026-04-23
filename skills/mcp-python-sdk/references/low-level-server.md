@@ -1,185 +1,203 @@
-# Low-Level Server API
+# Low-Level Server
 
-The `mcp.server.Server` class gives direct access to the protocol layer.
-Use it when FastMCP's decorator model is too constraining — you need dynamic
-handler registration, custom capability negotiation, or middleware.
+Sources: `docs/migration.md` (v2 handler API),
+`docs/README.md` (v1 section "Low-Level Server"),
+`docs/mcpio__specification__2025-11-25__server__index.md`
 
-## Basic structure
+## What it is
+
+The lowlevel `Server` class (`mcp.server.Server` in v2; previously
+`mcp.server.lowlevel.server.Server`) is the raw protocol layer. It provides
+no decorator magic, no schema inference, no automatic wrapping — you construct
+and return full MCP result types yourself.
+
+Use it when FastMCP's convenience layer is in the way. Most servers should
+start with `FastMCP` / `MCPServer` and drop to lowlevel only for specific
+handlers.
+
+## v1 pattern (decorator-based)
+
+In v1, handlers were registered via decorator methods:
 
 ```python
-from mcp.server import Server
-from mcp.server.models import InitializationOptions
-from mcp import types
-import mcp.server.stdio as stdio_transport
+from mcp.server.lowlevel.server import Server
+import mcp.types as types
 
-app = Server("my-server")
+server = Server("my-server")
 
-@app.list_tools()
-async def handle_list_tools() -> list[types.Tool]:
-    return [
-        types.Tool(
-            name="my_tool",
-            description="Does something",
-            inputSchema={
-                "type": "object",
-                "properties": {"param": {"type": "string"}},
-                "required": ["param"],
-            },
-        )
-    ]
+@server.list_tools()
+async def handle_list_tools():
+    return [types.Tool(name="my_tool", description="A tool", inputSchema={})]
 
-@app.call_tool()
+@server.call_tool()
+async def handle_call_tool(name: str, arguments: dict):
+    return [types.TextContent(type="text", text=f"Called {name}")]
+```
+
+v1 decorators auto-wrapped return values: bare lists became result types,
+dicts became `structured_content + TextContent`, etc.
+
+## v2 pattern (constructor `on_*` params)
+
+In v2, all handlers are registered as `on_*` keyword arguments to the
+constructor. Handlers receive `(ctx: ServerRequestContext, params: ...)` and
+must return fully constructed result types:
+
+```python
+from mcp.server import Server, ServerRequestContext
+from mcp.types import (
+    CallToolRequestParams, CallToolResult,
+    ListToolsResult, PaginatedRequestParams,
+    TextContent, Tool,
+)
+
+async def handle_list_tools(
+    ctx: ServerRequestContext,
+    params: PaginatedRequestParams | None,
+) -> ListToolsResult:
+    return ListToolsResult(tools=[
+        Tool(name="my_tool", description="A tool", input_schema={}),
+    ])
+
 async def handle_call_tool(
-    name: str, arguments: dict | None
-) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    if name == "my_tool":
-        param = (arguments or {}).get("param", "")
-        return [types.TextContent(type="text", text=f"result: {param}")]
-    raise ValueError(f"Unknown tool: {name}")
-
-async def run():
-    async with stdio_transport.stdio_server() as (read, write):
-        await app.run(
-            read,
-            write,
-            InitializationOptions(
-                server_name="my-server",
-                server_version="0.1.0",
-                capabilities=app.get_capabilities(
-                    notification_options=types.NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(run())
-```
-
-## Handler decorators
-
-The `Server` class exposes decorators for each protocol method:
-
-| Decorator | Protocol method |
-|-----------|----------------|
-| `@app.list_tools()` | `tools/list` |
-| `@app.call_tool()` | `tools/call` |
-| `@app.list_resources()` | `resources/list` |
-| `@app.list_resource_templates()` | `resources/templates/list` |
-| `@app.read_resource()` | `resources/read` |
-| `@app.subscribe_resource()` | `resources/subscribe` |
-| `@app.unsubscribe_resource()` | `resources/unsubscribe` |
-| `@app.list_prompts()` | `prompts/list` |
-| `@app.get_prompt()` | `prompts/get` |
-| `@app.set_logging_level()` | `logging/setLevel` |
-| `@app.completion()` | `completion/complete` |
-
-Only register handlers for primitives you include in capabilities.
-
-## Capabilities declaration
-
-```python
-from mcp.server.models import InitializationOptions
-from mcp import types
-
-capabilities = app.get_capabilities(
-    notification_options=types.NotificationOptions(
-        tools_changed=True,       # server will send tools/list_changed
-        resources_changed=True,   # server will send resources/list_changed
-        prompts_changed=True,
-    ),
-    experimental_capabilities={},
-)
-```
-
-`get_capabilities()` inspects which handler decorators you've registered and
-builds the capability map. If you register a `list_tools` handler, tools are
-in capabilities. If you don't register one, they aren't — regardless of what
-you pass to `InitializationOptions`.
-
-## Sending notifications
-
-Notify the client when state changes without waiting for a request:
-
-```python
-from mcp.server import Server
-
-# Inside a handler or background task:
-await app.request_context.session.send_resource_updated(
-    types.ResourceUpdatedNotification(
-        method="notifications/resources/updated",
-        params=types.ResourceUpdatedParams(uri="mydata://items/42"),
+    ctx: ServerRequestContext,
+    params: CallToolRequestParams,
+) -> CallToolResult:
+    return CallToolResult(
+        content=[TextContent(type="text", text=f"Called {params.name}")],
+        is_error=False,
     )
+
+server = Server(
+    "my-server",
+    on_list_tools=handle_list_tools,
+    on_call_tool=handle_call_tool,
 )
 ```
 
-Or use the typed helper methods available on the session object.
+Note: `params.arguments` can be `None` in v2 — use `params.arguments or {}`.
 
-## Error handling
+## Handler reference (v2)
 
-Raise `McpError` to send a structured error response:
+All handlers: `(ctx: ServerRequestContext, params) -> result`.
+
+| Constructor kwarg | `params` type | Return type |
+|---|---|---|
+| `on_list_tools` | `PaginatedRequestParams \| None` | `ListToolsResult` |
+| `on_call_tool` | `CallToolRequestParams` | `CallToolResult` |
+| `on_list_resources` | `PaginatedRequestParams \| None` | `ListResourcesResult` |
+| `on_list_resource_templates` | `PaginatedRequestParams \| None` | `ListResourceTemplatesResult` |
+| `on_read_resource` | `ReadResourceRequestParams` | `ReadResourceResult` |
+| `on_subscribe_resource` | `SubscribeRequestParams` | `EmptyResult` |
+| `on_list_prompts` | `PaginatedRequestParams \| None` | `ListPromptsResult` |
+| `on_get_prompt` | `GetPromptRequestParams` | `GetPromptResult` |
+| `on_completion` | `CompleteRequestParams` | `CompleteResult` |
+| `on_set_logging_level` | `SetLevelRequestParams` | `EmptyResult` |
+| `on_ping` | `RequestParams \| None` | `EmptyResult` |
+| `on_progress` (notification) | `ProgressNotificationParams` | `None` |
+
+All params and return types are importable from `mcp.types`.
+
+## Return types: no auto-wrapping in v2
+
+v2 removes all magic wrapping. Build the complete result type yourself:
 
 ```python
-from mcp import McpError, types
+# Text content in a read_resource handler
+from mcp.types import ReadResourceResult, TextResourceContents
 
-@app.call_tool()
-async def handle_call_tool(name: str, arguments: dict | None):
-    if name not in KNOWN_TOOLS:
-        raise McpError(
-            error=types.ErrorData(
-                code=types.INVALID_PARAMS,
-                message=f"Unknown tool: {name}",
-            )
+async def handle_read(ctx, params) -> ReadResourceResult:
+    return ReadResourceResult(contents=[
+        TextResourceContents(
+            uri=str(params.uri),
+            text="file contents",
+            mime_type="text/plain",
         )
+    ])
+
+# Binary content — you must base64-encode yourself
+import base64
+from mcp.types import BlobResourceContents
+
+async def handle_read_binary(ctx, params) -> ReadResourceResult:
+    return ReadResourceResult(contents=[
+        BlobResourceContents(
+            uri=str(params.uri),
+            blob=base64.b64encode(data).decode("utf-8"),
+            mime_type="image/png",
+        )
+    ])
 ```
 
-Unhandled exceptions propagate as `InternalError`. Catch at the handler
-boundary — do not let exceptions cross the protocol layer silently.
+## ServerRequestContext
 
-## Request context
+Available in all handlers as `ctx`:
+- `ctx.session` — the active `ServerSession`
+- `ctx.lifespan_context` — typed lifespan state (server-side)
+- `ctx.request_id` — unique request ID (None in notification handlers)
+- `ctx.meta` — `RequestParamsMeta` TypedDict with `progress_token`, etc.
 
-The `RequestContext` is available during any handler call:
+In v2, `ctx.meta` is a TypedDict — access via `ctx.meta.get("progress_token")`
+not attribute access.
+
+## Streamable HTTP from the lowlevel server (v2)
+
+v2 adds `streamable_http_app()` directly on the lowlevel `Server`:
 
 ```python
-@app.call_tool()
-async def handle_call_tool(name: str, arguments: dict | None):
-    ctx = app.request_context
-    client_info = ctx.meta.clientInfo  # name, version
-    session = ctx.session              # active ServerSession
-    ...
+app = server.streamable_http_app(
+    streamable_http_path="/mcp",
+    json_response=False,
+    stateless_http=False,
+)
+# server.session_manager available after calling streamable_http_app()
 ```
 
-## Dynamic tool registration
+## Registering handlers not exposed by MCPServer (workaround)
 
-Unlike FastMCP (which reads registrations at class instantiation), the
-low-level server dispatches every `tools/call` to your single `call_tool`
-handler. Implement dynamic dispatch inside the handler:
+Handlers like `subscribe_resource` and `set_logging_level` have no public
+FastMCP/MCPServer API. Use `_add_request_handler` (v2 private API):
 
 ```python
-TOOLS: dict[str, callable] = {}
+from mcp.server import ServerRequestContext
+from mcp.types import EmptyResult, SetLevelRequestParams
 
-def register_tool(name: str, fn: callable, schema: dict):
-    TOOLS[name] = fn
-    SCHEMAS[name] = schema
+async def handle_set_level(ctx: ServerRequestContext, params: SetLevelRequestParams) -> EmptyResult:
+    return EmptyResult()
 
-@app.list_tools()
-async def list_tools():
-    return [
-        types.Tool(name=k, inputSchema=v, description="")
-        for k, v in SCHEMAS.items()
-    ]
-
-@app.call_tool()
-async def call_tool(name: str, arguments: dict | None):
-    fn = TOOLS.get(name)
-    if fn is None:
-        raise McpError(error=types.ErrorData(code=types.METHOD_NOT_FOUND, message=name))
-    return await fn(**(arguments or {}))
+mcp._lowlevel_server._add_request_handler("logging/setLevel", handle_set_level)
 ```
 
-## Mixing FastMCP and low-level
+This is private and may change. A public API is planned.
 
-Do not mix. FastMCP wraps a low-level `Server` internally; accessing its
-`._server` attribute for customization is unsupported and breaks across SDK
-versions. If you need low-level control, start from `Server` directly.
+## JSON-RPC message validation (v2)
+
+Union message types are no longer `RootModel` subclasses. Validate with
+provided `TypeAdapter` instances:
+
+```python
+from mcp.types import client_request_adapter
+
+request = client_request_adapter.validate_python(raw_data)
+# No .root access needed
+```
+
+Sending notifications/requests — no longer need wrapper types:
+
+```python
+# v1
+await session.send_notification(ClientNotification(InitializedNotification()))
+
+# v2
+await session.send_notification(InitializedNotification())
+```
+
+## When to use lowlevel vs FastMCP
+
+| Situation | Use |
+|-----------|-----|
+| New server, standard tool/resource/prompt model | FastMCP |
+| Need full control of result types and response structure | Lowlevel |
+| Custom protocol extensions or middleware | Lowlevel |
+| Subscribe/logging handlers not in FastMCP | Lowlevel workaround or lowlevel `Server` |
+| Testing via in-process transport | Either — see `testing.md` |
