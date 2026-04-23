@@ -1,141 +1,137 @@
-# Prebuilt Agents
+# Agents and Prebuilt Patterns
 
-LangGraph ships `create_react_agent` as the canonical prebuilt agent.
-It wraps the standard ReAct (reason + act) loop into a compiled graph.
+Source: `docs/overview.md`, `docs/workflows-agents.md`, `docs/quickstart.md`,
+`docs/thinking-in-langgraph.md`
 
 ## create_react_agent
 
+LangGraph ships a prebuilt `create_react_agent` factory for the standard
+LLM-tool loop (reason → act → observe). It is the fastest path to a working
+agent when the architecture is a straightforward tool-calling loop.
+
 ```python
 from langgraph.prebuilt import create_react_agent
-from langchain_anthropic import ChatAnthropic
+from langchain.chat_models import init_chat_model
 from langchain.tools import tool
+
+@tool
+def add(a: int, b: int) -> int:
+    """Add two numbers."""
+    return a + b
+
+model = init_chat_model("claude-sonnet-4-6", temperature=0)
+agent = create_react_agent(model, tools=[add])
+
+result = agent.invoke({"messages": [{"role": "user", "content": "What is 2+3?"}]})
+```
+
+`create_react_agent` returns a compiled `StateGraph` using `MessagesState`.
+Add a `checkpointer` for persistence and `interrupt_before=["tools"]` for
+tool approval. Source: LangGraph overview and prebuilt module.
+
+## When to build a custom graph instead
+
+Use `create_react_agent` for the common LLM-plus-tools loop. Build a custom
+`StateGraph` when you need:
+- Multi-step workflows with non-LLM nodes.
+- Branching based on classification results.
+- Parallel fan-out and merge.
+- Fine-grained retry policies per node.
+- Human review at points other than before every tool call.
+
+Source: `docs/overview.md`.
+
+## Common workflow patterns (Graph API)
+
+Source: `docs/workflows-agents.md`
+
+### Prompt chaining
+
+Sequential nodes, each processing the output of the previous:
+
+```python
+builder = StateGraph(State)
+builder.add_node("step_1", step_1)
+builder.add_node("step_2", step_2)
+builder.add_edge(START, "step_1")
+builder.add_edge("step_1", "step_2")
+builder.add_edge("step_2", END)
+```
+
+### Routing / branching
+
+One node classifies and routes to different specialised nodes:
+
+```python
+def router(state: State) -> Command[Literal["path_a", "path_b"]]:
+    if state["intent"] == "a":
+        return Command(goto="path_a")
+    return Command(goto="path_b")
+```
+
+### Parallelization (fan-out / fan-in)
+
+Multiple outgoing edges from one node run branches in the same super-step:
+
+```python
+builder.add_edge("classify", "search_docs")
+builder.add_edge("classify", "fetch_history")
+builder.add_edge("search_docs", "draft")
+builder.add_edge("fetch_history", "draft")
+```
+
+Both `search_docs` and `fetch_history` run in parallel; `draft` runs after both
+complete. Source: `docs/workflows-agents.md`.
+
+### Map-reduce (Send API)
+
+Fan out over a dynamic list with separate state copies:
+
+```python
+from langgraph.types import Send
+
+def generate_subjects(state: State):
+    return [Send("write_section", {"subject": s}) for s in state["subjects"]]
+
+builder.add_conditional_edges("plan", generate_subjects)
+```
+
+Source: `docs/graph-api.md`.
+
+### Orchestrator-subagent
+
+One node decides what tasks to spawn; subgraph or `Send` carries out each task.
+The orchestrator coordinates; subagents specialise. Source: `docs/workflows-agents.md`.
+
+## Tool binding (LangChain integration)
+
+LangGraph does not require LangChain, but integrates naturally:
+
+```python
+from langchain.tools import tool
+from langchain.chat_models import init_chat_model
+
+model = init_chat_model("claude-sonnet-4-6")
 
 @tool
 def search(query: str) -> str:
     """Search the web."""
-    return f"Results for: {query}"
+    ...
 
-model = ChatAnthropic(model="claude-sonnet-4-6")
-agent = create_react_agent(model, tools=[search])
-
-result = agent.invoke({"messages": [{"role": "user", "content": "What is LangGraph?"}]})
+model_with_tools = model.bind_tools([search])
 ```
 
-The returned agent is a compiled `StateGraph` with `MessagesState`. It is
-a graph — you can stream it, add a checkpointer, use interrupts, inspect
-state, everything the raw graph API provides.
+The LLM node calls `model_with_tools.invoke(state["messages"])`. A separate
+tool node executes the tool calls in the returned message. Conditional edge
+routes back to the LLM node until no more tool calls. Source: `docs/quickstart.md`.
 
-## With persistence and human-in-the-loop
+## Error handling strategies in agents
 
-```python
-from langgraph.checkpoint.memory import InMemorySaver
+Source: `docs/thinking-in-langgraph.md`
 
-checkpointer = InMemorySaver()
-agent = create_react_agent(model, tools=[search], checkpointer=checkpointer)
-
-config = {"configurable": {"thread_id": "session-1"}}
-agent.invoke({"messages": [...]}, config)  # thread remembers history
-```
-
-For human approval of tool calls, use `interrupt_before`:
-
-```python
-agent = create_react_agent(
-    model,
-    tools=[search],
-    checkpointer=checkpointer,
-    interrupt_before=["tools"],  # pause before any tool execution
-)
-```
-
-Alternatively, place `interrupt()` inside a tool function (see
-`references/interrupts.md`).
-
-## Streaming from create_react_agent
-
-```python
-for chunk in agent.stream(
-    {"messages": [{"role": "user", "content": "..."}]},
-    stream_mode="messages",
-    version="v2",
-):
-    if chunk["type"] == "messages":
-        msg, meta = chunk["data"]
-        if msg.content:
-            print(msg.content, end="")
-```
-
-## Customising the prebuilt agent
-
-`create_react_agent` accepts several hooks for common customisation needs:
-
-- `state_schema` — replace `MessagesState` with a custom schema
-- `prompt` — system message string, or a function `(state) -> messages`
-- `response_format` — Pydantic model for structured final response
-- `pre_model_hook` / `post_model_hook` — callables run before/after LLM call
-- `tools` — list of LangChain tools or functions decorated with `@tool`
-
-Example with a custom system prompt:
-
-```python
-agent = create_react_agent(
-    model,
-    tools=[search],
-    prompt="You are a helpful assistant. Be concise.",
-)
-```
-
-Example with custom state:
-
-```python
-from langgraph.graph import MessagesState
-
-class AgentState(MessagesState):
-    user_id: str
-    session_context: dict
-
-agent = create_react_agent(model, tools=[search], state_schema=AgentState)
-```
-
-## When to drop to a raw StateGraph
-
-Use `create_react_agent` when the ReAct loop is the right architecture.
-Drop to a raw `StateGraph` when:
-
-- You need more than one agent / subgraph with explicit handoffs
-- Your control flow is a fixed pipeline, not a tool-calling loop
-- You need custom branching logic that doesn't fit pre/post hooks
-- You need parallel node execution
-- You need to customise the LLM node itself (not just wrap it)
-
-The prebuilt agent is a starting point, not a ceiling. When it feels like
-you are fighting the abstraction, replace it with the equivalent raw graph:
-
-```python
-from langgraph.graph import StateGraph, MessagesState, START, END
-
-def call_llm(state: MessagesState):
-    response = model_with_tools.invoke(state["messages"])
-    return {"messages": [response]}
-
-def route_tools(state: MessagesState):
-    last = state["messages"][-1]
-    if last.tool_calls:
-        return "tools"
-    return END
-
-from langgraph.prebuilt import ToolNode
-
-graph = (
-    StateGraph(MessagesState)
-    .add_node("llm", call_llm)
-    .add_node("tools", ToolNode(tools=[search]))
-    .add_edge(START, "llm")
-    .add_conditional_edges("llm", route_tools)
-    .add_edge("tools", "llm")
-    .compile(checkpointer=checkpointer)
-)
-```
-
-`ToolNode` is a prebuilt node that executes tool calls from the last
-`AIMessage` and returns `ToolMessage` results.
+| Error type | Strategy |
+|------------|----------|
+| Transient (network, rate limit) | `RetryPolicy` on the node |
+| LLM-recoverable (tool failure, parse error) | Store error in state; `Command(goto="llm")` |
+| User-fixable (missing info) | `interrupt()` to collect from user |
+| Unexpected | Let propagate for debugging |
