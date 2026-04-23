@@ -1,13 +1,16 @@
 # Webhooks
 
+Sources: `telegram.webhookinfo.rst`, `telegram.ext.updater.rst`,
+`examples.customwebhookbot.rst`, `examples.rst`.
+
 ## How Telegram webhooks work
 
-Instead of your bot polling `getUpdates`, Telegram pushes each update as an
-HTTPS POST request to a URL you register. Requirements:
+Instead of polling `getUpdates`, Telegram pushes each update as an HTTPS POST
+to a URL you register. Requirements:
 
-1. The URL must be reachable by Telegram's servers (public, not `localhost`).
-2. The URL must use HTTPS with a valid TLS certificate (self-signed accepted if
-   you pass the certificate to `set_webhook`; CA-signed is simpler).
+1. URL must be publicly reachable by Telegram's servers.
+2. URL must use HTTPS (self-signed cert accepted if passed to `set_webhook`;
+   CA-signed is simpler).
 3. Port must be one of: 443, 80, 88, 8443.
 
 ## PTB built-in webhook server
@@ -20,26 +23,27 @@ app.run_webhook(
     port=8443,
     url_path="/webhook",
     webhook_url="https://yourdomain.com/webhook",
-    secret_token="a-random-string-you-choose",   # optional but recommended
-    # cert="path/to/cert.pem",                   # only for self-signed certs
+    secret_token="a-random-string-you-choose",
+    # cert="path/to/cert.pem",   # only for self-signed certs
     # key="path/to/key.pem",
 )
 ```
 
-PTB sets the webhook with Telegram automatically when `webhook_url` is
-provided. If you manage webhook registration separately, omit `webhook_url`.
+PTB registers the webhook with Telegram automatically when `webhook_url` is
+provided. Omit `webhook_url` if you manage webhook registration separately.
 
 ## Secret token
 
-Pass `secret_token` to `run_webhook()` and set the same value in
-`setWebhook`. Telegram includes it as `X-Telegram-Bot-Api-Secret-Token`
-header on every request. PTB validates the header and rejects requests that
-omit or mismatch it. This prevents spoofed updates from non-Telegram senders.
+Pass `secret_token` to `run_webhook()` and configure the same value in
+`set_webhook`. Telegram includes it as `X-Telegram-Bot-Api-Secret-Token`
+header on every request. PTB validates and rejects mismatched requests.
+This prevents spoofed updates.
 
 ## Integrating with FastAPI (ASGI)
 
-Use PTB's `Application` as a handler inside a FastAPI app when you need to
-share the same HTTP server (e.g. mixing a REST API and a bot):
+Use when you need to share one HTTP server between a REST API and a bot.
+Do NOT call `run_polling()` or `run_webhook()` in this mode.
+(Source: `examples.customwebhookbot.rst`, `inclusions__application_run_tip.rst`)
 
 ```python
 from contextlib import asynccontextmanager
@@ -71,47 +75,43 @@ async def telegram_webhook(request: Request) -> Response:
 ```
 
 Key points:
-- `ptb_app.initialize()` + `ptb_app.start()` in lifespan startup.
-- `ptb_app.process_update(update)` dispatches to registered handlers.
-- `ptb_app.stop()` + `ptb_app.shutdown()` in lifespan shutdown.
-- Do NOT call `run_webhook()` or `run_polling()` — they block and own the loop.
+- `initialize()` + `start()` in lifespan startup.
+- `process_update(update)` dispatches to registered handlers.
+- `stop()` + `shutdown()` in lifespan teardown.
 
 ## Local development with webhooks
 
 Telegram cannot reach `localhost`. Options:
+- Use `run_polling()` during development — simplest.
+- Use a tunneling tool (ngrok, bore, cloudflared) to expose a local port.
 
-- Use polling during development (`run_polling()`) — simplest.
-- Use a tunneling service (e.g. ngrok, bore, cloudflared tunnel) to expose
-  a local port via a public HTTPS URL.
-- Deploy to a staging environment that has a real public URL.
-
-Do not hardcode tunnel URLs — they change. Keep them in environment variables.
+Do not hardcode tunnel URLs — they change. Store in environment variables.
 
 ## Webhook registration and deletion
 
 ```python
-# Set webhook manually (PTB also does this if you pass webhook_url to run_webhook)
+# Register manually
 await app.bot.set_webhook(
     url="https://yourdomain.com/webhook",
     secret_token="your-secret",
 )
 
-# Check current webhook status
+# Check current status
 info = await app.bot.get_webhook_info()
 print(info.url, info.pending_update_count)
 
-# Delete webhook (switch back to polling)
+# Delete (switch back to polling)
 await app.bot.delete_webhook()
 ```
 
-Switching between polling and webhook: always delete the webhook before
-calling `run_polling()`, otherwise `getUpdates` returns an error.
+Always call `delete_webhook()` before switching to polling — an active webhook
+causes `getUpdates` to return a `409 Conflict`.
 
 ## Common webhook problems
 
 | Symptom | Likely cause |
 |---------|-------------|
-| No updates received | Webhook URL not set, or certificate invalid |
-| `409 Conflict` on `getUpdates` | Webhook still set; call `delete_webhook()` first |
-| Updates arriving twice | Two bot instances running (one polling, one webhook) |
-| `403 Forbidden` from your server | Secret token mismatch or IP allowlist blocking Telegram |
+| No updates received | Webhook URL not set or certificate invalid |
+| `409 Conflict` on `getUpdates` | Webhook still set; call `delete_webhook()` |
+| Updates arriving twice | Two bot instances running simultaneously |
+| `403 Forbidden` from your server | Secret token mismatch |

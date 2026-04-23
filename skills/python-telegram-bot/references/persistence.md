@@ -1,15 +1,19 @@
 # Persistence
 
+Sources: `telegram.ext.persistence-tree.rst`, `telegram.ext.picklepersistence.rst`,
+`telegram.ext.basepersistence.rst`, `telegram.ext.dictpersistence.rst`,
+`telegram.ext.persistenceinput.rst`, `stability_policy.rst`,
+`examples.persistentconversationbot.rst`.
+
 ## The problem
 
 By default, `user_data`, `chat_data`, `bot_data`, and `ConversationHandler`
 state live in memory. A bot restart wipes them. Persistence serializes these
-dicts to a storage backend and reloads them on startup.
+to storage and reloads on startup.
 
 ## PicklePersistence
 
-The built-in persistence implementation. Serializes to a file using Python's
-`pickle` module.
+The built-in implementation. Serializes to a file via Python `pickle`.
 
 ```python
 from telegram.ext import ApplicationBuilder, PicklePersistence
@@ -24,8 +28,8 @@ app = (
 )
 ```
 
-PTB reads the file on `app.initialize()` and writes it periodically (every
-`update_interval` seconds, default 60) and on `app.shutdown()`.
+PTB reads the file on `app.initialize()` and writes periodically (default
+every 60 seconds via `update_interval`) and on `app.shutdown()`.
 
 ### What PicklePersistence saves
 
@@ -34,12 +38,10 @@ PTB reads the file on `app.initialize()` and writes it periodically (every
 | `bot_data` | yes |
 | `chat_data` | yes |
 | `user_data` | yes |
-| `callback_data` (arbitrary callback data cache) | yes, if enabled |
-| `ConversationHandler` state | yes, if handler has `persistent=True` and a `name` |
+| Arbitrary callback data cache | yes, if enabled |
+| `ConversationHandler` state | yes, if handler has `persistent=True` and `name` |
 
-### Persistence scope
-
-To persist only some data stores, use `store_data`:
+### Selective persistence
 
 ```python
 from telegram.ext import PersistenceInput
@@ -57,24 +59,25 @@ PicklePersistence(
 
 ## Persisting ConversationHandler state
 
-Two extra parameters are required on `ConversationHandler`:
+Requires both `persistent=True` and a stable `name` on `ConversationHandler`:
 
 ```python
 ConversationHandler(
     entry_points=...,
     states=...,
     fallbacks=...,
-    persistent=True,          # enable persistence for this handler
-    name="my_conv",           # stable key; must be unique per application
+    persistent=True,
+    name="my_conv",    # unique per application; lost on restart without this
 )
 ```
 
 Without `name`, PTB keys by object identity (memory address), which changes
-every restart. Without `persistent=True`, the handler state is never written.
+every restart. (Source: `examples.persistentconversationbot.rst`)
 
 ## Custom persistence (BasePersistence)
 
-For production use, implement `BasePersistence` to write to a database:
+For production, implement `BasePersistence` to write to a database.
+All methods are async.
 
 ```python
 from telegram.ext import BasePersistence, PersistenceInput
@@ -100,26 +103,28 @@ class RedisPersistence(BasePersistence):
     async def flush(self) -> None: ...
 ```
 
-All methods are async. PTB calls them on update and on shutdown.
-
 ## Pickle limitations
 
-- Pickle is not human-readable or portable across Python versions without care.
-- Stored objects must be picklable — lambda functions, open file handles, and
-  database connections are not. Store only plain data in `user_data` etc.
-- Concurrent writes from multiple processes will corrupt the file.
-  `PicklePersistence` is single-process only.
-- The file is overwritten atomically (temp file + rename) on platforms that
-  support it. Still, back up in production.
-
-## Data type contracts
-
-PTB expects the data dicts to be plain `dict` instances. Subclasses may work
-but are not guaranteed. If you use `defaultdict` or other mapping types,
-ensure they serialize correctly with your chosen persistence backend.
+- Not portable across Python versions without care.
+  (Source: `stability_policy.rst` — "pickled objects from one version of PTB
+  may not be loadable in future versions")
+- Objects must be picklable — no lambdas, open file handles, or DB connections.
+  Store only plain data in `user_data` etc.
+- Single-process only. Concurrent writes from multiple processes corrupt the file.
+- File is overwritten atomically (temp file + rename) on supporting platforms.
 
 ## Clearing old data
 
-If a user is deleted or a conversation is abandoned, the data dicts grow
-indefinitely. Implement a periodic job or `drop_user_data` / `drop_chat_data`
-calls to prune entries older than a threshold.
+`user_data` and `chat_data` dicts grow indefinitely as new users interact.
+Schedule a periodic job or call `drop_user_data(user_id)` /
+`drop_chat_data(chat_id)` on `BasePersistence` to prune stale entries.
+
+## DictPersistence
+
+An in-memory persistence implementation (no file). Useful for testing.
+Data does not survive restarts. (Source: `telegram.ext.dictpersistence.rst`)
+
+```python
+from telegram.ext import DictPersistence
+persistence = DictPersistence()
+```

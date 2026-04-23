@@ -1,5 +1,12 @@
 # Inline Keyboards and Callback Queries
 
+Sources: `telegram.inlinekeyboardmarkup.rst`, `telegram.inlinekeyboardbutton.rst`,
+`telegram.callbackquery.rst`, `telegram.ext.callbackqueryhandler.rst`,
+`telegram.ext.callbackdatacache.rst`, `telegram.ext.extbot.rst`,
+`telegram.ext.inlinequeryhandler.rst`, `examples.inlinekeyboard.rst`,
+`examples.inlinekeyboard2.rst`, `examples.inlinebot.rst`,
+`examples.arbitrarycallbackdatabot.rst`.
+
 ## Sending an inline keyboard
 
 ```python
@@ -17,33 +24,33 @@ reply_markup = InlineKeyboardMarkup(keyboard)
 await update.message.reply_text("Choose:", reply_markup=reply_markup)
 ```
 
-`InlineKeyboardMarkup` takes a list-of-lists structure. Each inner list is
-one row; each `InlineKeyboardButton` is one button in that row.
+`InlineKeyboardMarkup` takes a list-of-lists. Each inner list is one row.
 
 ## callback_data
 
-`callback_data` is a string (max 64 bytes). When the user presses the button,
-Telegram sends a `CallbackQuery` update with `callback_query.data` set to
-that string.
+`callback_data` is a string (max 64 bytes). When pressed, Telegram sends a
+`CallbackQuery` update with `callback_query.data` set to that string.
 
-For structured data, encode to a compact string format:
+For structured data, encode to a compact string:
 
 ```python
-# simple pattern
 InlineKeyboardButton("Item 1", callback_data="item:1")
-InlineKeyboardButton("Item 2", callback_data="item:2")
 
-# handler
 CallbackQueryHandler(item_callback, pattern=r"^item:(\d+)$")
 
 async def item_callback(update, context):
-    query = update.callback_query
     item_id = context.matches[0].group(1)
-    await query.answer()
-    await query.edit_message_text(f"You picked item {item_id}")
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(f"Item {item_id}")
 ```
 
-For arbitrary Python objects as callback data, enable `arbitrary_callback_data`:
+## Arbitrary callback data (objects, not strings)
+
+For complex data that exceeds 64 bytes, enable `arbitrary_callback_data`.
+Requires `pip install "python-telegram-bot[callback-data]"`.
+PTB stores data server-side in `CallbackDataCache` and sends only a UUID to
+Telegram. (Source: `telegram.ext.callbackdatacache.rst`, `telegram.ext.extbot.rst`,
+`examples.arbitrarycallbackdatabot.rst`)
 
 ```python
 app = (
@@ -53,17 +60,14 @@ app = (
     .build()
 )
 
-# Now callback_data can be any picklable object:
+# callback_data can now be any picklable object:
 InlineKeyboardButton("Go", callback_data={"action": "go", "id": 42})
 ```
-
-This stores data server-side in a `CallbackDataCache`. The button sends only
-a UUID to Telegram; PTB resolves it back on arrival. Avoids the 64-byte limit.
 
 ## Answering a callback query
 
 Always call `answer()` when handling a callback query. Telegram shows a
-spinner on the button until you do; leaving it unanswered looks broken.
+spinner on the button until you do.
 
 ```python
 async def button_handler(update, context):
@@ -71,31 +75,32 @@ async def button_handler(update, context):
     await query.answer()                          # dismiss spinner
     # OR: await query.answer(text="Processing...")  # show toast
     # OR: await query.answer(text="Done!", show_alert=True)  # modal alert
-
     await query.edit_message_text("Updated text")
 ```
-
-Methods on `CallbackQuery`:
 
 | Method | Effect |
 |--------|--------|
 | `answer()` | Dismiss spinner |
-| `edit_message_text(text)` | Replace the message text |
-| `edit_message_reply_markup(markup)` | Replace the keyboard only |
-| `edit_message_caption(caption)` | Replace caption on a photo/video |
+| `edit_message_text(text)` | Replace message text |
+| `edit_message_reply_markup(markup)` | Replace keyboard only |
+| `edit_message_caption(caption)` | Replace caption on photo/video |
 | `delete_message()` | Delete the message |
+
+When calling `edit_message_text`, pass `reply_markup=reply_markup` again to
+keep the keyboard — omitting it removes the keyboard.
 
 ## Inline query mode
 
-Inline queries let users trigger your bot from any chat by typing
-`@botusername <query>`. Enable via BotFather (`/setinline`).
+Lets users trigger the bot from any chat via `@botusername <query>`.
+Enable inline mode with BotFather (`/setinline`).
+(Source: `examples.rst`, `examples.inlinebot.rst`)
 
 ```python
 from telegram import InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import InlineQueryHandler
 import uuid
 
-async def inline_query_handler(update, context):
+async def inline_handler(update, context):
     query = update.inline_query.query
     results = [
         InlineQueryResultArticle(
@@ -106,23 +111,17 @@ async def inline_query_handler(update, context):
     ]
     await update.inline_query.answer(results)
 
-app.add_handler(InlineQueryHandler(inline_query_handler))
+app.add_handler(InlineQueryHandler(inline_handler))
 ```
 
-`answer()` takes a list of `InlineQueryResult*` objects. Up to 50 results per
-call. Use `cache_time=0` during development to see changes immediately.
-
-## Keyboard persistence across edits
-
-When you `edit_message_text`, pass `reply_markup=reply_markup` again to keep
-the keyboard. Without it, the keyboard is removed from the edited message.
+`answer()` takes up to 50 `InlineQueryResult*` objects. Use `cache_time=0`
+during development.
 
 ## ReplyKeyboardMarkup (chat keyboard, not inline)
 
-`ReplyKeyboardMarkup` is different from `InlineKeyboardMarkup`. It replaces
-the user's text input area with persistent buttons. It does not produce
-`CallbackQuery` updates — pressing a button sends a regular text message with
-the button's label.
+Different from `InlineKeyboardMarkup` — replaces the text input area with
+persistent buttons. Pressing a button sends a regular text message; no
+`CallbackQuery` is produced.
 
 ```python
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove

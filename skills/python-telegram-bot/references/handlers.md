@@ -1,5 +1,11 @@
 # Handlers
 
+Sources: `telegram.ext.handlers-tree.rst`, `telegram.ext.commandhandler.rst`,
+`telegram.ext.messagehandler.rst`, `telegram.ext.callbackqueryhandler.rst`,
+`telegram.ext.filters.rst`, `telegram.ext.basehandler.rst`,
+`telegram.ext.applicationhandlerstop.rst`, `examples.echobot.rst`,
+`examples.errorhandlerbot.rst`.
+
 ## Handler registration
 
 ```python
@@ -19,29 +25,25 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 ## CommandHandler
 
-Matches messages starting with `/command`. The `commands` parameter accepts
-a string or list of strings (without the leading `/`).
+Matches messages starting with `/command`.
 
 ```python
 CommandHandler("help", help_callback)
 CommandHandler(["start", "begin"], start_callback)   # multiple triggers
 ```
 
-Arguments after the command are available as `context.args` (a list of strings):
+Arguments after the command are available as `context.args` (list of strings):
 
-```
-/set 10 hello
-```
 ```python
+# User sends: /set 10 hello
 async def set_callback(update, context):
     value, label = context.args[0], context.args[1]
 ```
 
 ## MessageHandler
 
-Catches non-command messages. Always provide a filter — a bare
-`MessageHandler(filters.ALL, ...)` fires on everything including commands,
-edited messages, and channel posts, which is rarely what you want.
+Always provide a filter. A bare `MessageHandler(filters.ALL, ...)` fires on
+everything including commands, edited messages, and channel posts.
 
 ```python
 MessageHandler(filters.TEXT & ~filters.COMMAND, text_callback)
@@ -51,17 +53,17 @@ MessageHandler(filters.Document.FileExtension("pdf"), pdf_callback)
 
 ## Filter composition
 
-Filters compose with Python bitwise operators:
+`filters` is a module (`telegram.ext.filters`), not a class.
+(Source: `telegram.ext.filters.rst`)
 
 | Operator | Meaning |
 |----------|---------|
-| `A & B` | A AND B |
-| `A \| B` | A OR B |
-| `~A` | NOT A |
+| `A & B` | AND |
+| `A \| B` | OR |
+| `~A` | NOT |
 
-`filters` is a module (`telegram.ext.filters`), not a class. Predefined
-filters include `filters.TEXT`, `filters.PHOTO`, `filters.COMMAND`,
-`filters.Regex(r"pattern")`, `filters.ChatType.PRIVATE`, and many more.
+Common built-in filters: `filters.TEXT`, `filters.PHOTO`, `filters.COMMAND`,
+`filters.Regex(r"pattern")`, `filters.ChatType.PRIVATE`, `filters.FORWARDED`.
 
 Custom filter:
 
@@ -72,27 +74,25 @@ class MyFilter(MessageFilter):
     def filter(self, message):
         return message.text and "hello" in message.text.lower()
 
-my_filter = MyFilter()
-app.add_handler(MessageHandler(my_filter, hello_callback))
+app.add_handler(MessageHandler(MyFilter(), hello_callback))
 ```
 
 ## CallbackQueryHandler
 
-Fires when a user presses an `InlineKeyboardButton`. The `pattern` argument
-is a regex applied to `callback_query.data`:
+Fires when a user presses an `InlineKeyboardButton`. The `pattern` parameter
+is a regex applied to `callback_query.data`.
 
 ```python
 CallbackQueryHandler(yes_callback, pattern=r"^yes$")
-CallbackQueryHandler(no_callback,  pattern=r"^no$")
 CallbackQueryHandler(any_callback)    # no pattern = catch-all
 ```
 
-Always answer the callback query to dismiss the "loading" spinner:
+Always answer the callback query to dismiss the spinner:
 
 ```python
 async def yes_callback(update, context):
     query = update.callback_query
-    await query.answer()           # required; optionally pass text= for toast
+    await query.answer()           # required
     await query.edit_message_text("You said yes.")
 ```
 
@@ -100,17 +100,17 @@ async def yes_callback(update, context):
 
 `add_handler` accepts an optional `group` integer (default `0`). Lower group
 numbers run first. Within a group, handlers are checked in registration order.
-A handler returning `ApplicationHandlerStop` prevents lower-priority handlers
-in the same group from running.
 
 ```python
 app.add_handler(high_priority_handler, group=0)
 app.add_handler(low_priority_handler,  group=1)
 ```
 
-## Error handler
+Raising `ApplicationHandlerStop` inside a handler prevents subsequent handlers
+in the same group from running.
+(Source: `telegram.ext.applicationhandlerstop.rst`)
 
-Register a single error handler to catch exceptions from any handler:
+## Error handler
 
 ```python
 async def error_handler(update, context):
@@ -121,3 +121,12 @@ app.add_error_handler(error_handler)
 ```
 
 Without an error handler, PTB logs the traceback but does not crash.
+See `examples.errorhandlerbot.rst` for a full example with traceback formatting.
+
+## Handler types available
+
+From `telegram.ext.handlers-tree.rst`:
+`CommandHandler`, `MessageHandler`, `CallbackQueryHandler`, `InlineQueryHandler`,
+`ChatMemberHandler`, `ChatJoinRequestHandler`, `PollHandler`, `PollAnswerHandler`,
+`PreCheckoutQueryHandler`, `ShippingQueryHandler`, `TypeHandler` (catch-all by
+update type), `ConversationHandler` (see `conversation-handler.md`).
