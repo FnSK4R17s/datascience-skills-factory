@@ -1,6 +1,8 @@
-# Testing MCP Servers
+# Testing and Debugging MCP Servers
 
-Sources: `docs/testing.md`, `docs/migration.md`
+Sources: `docs/testing.md`, `docs/migration.md`,
+`docs/mcpio__docs__tools__debugging.md`,
+`docs/mcpio__docs__tools__inspector.md`
 
 ## In-process testing (recommended)
 
@@ -134,3 +136,50 @@ explicitly.
 - **Lifespan in tests:** if your server has a `lifespan` context manager,
   `Client(server)` runs it end-to-end — ensure test fixtures clean up after
   themselves.
+
+## MCP Inspector
+
+Interactive UI for testing stdio and HTTP servers without writing client code:
+
+```bash
+# npm / PyPI package
+npx @modelcontextprotocol/inspector uvx mcp-server-git --repository ~/code/mcp
+
+# Locally developed Python server
+npx @modelcontextprotocol/inspector uv --directory path/to/server run package-name
+```
+
+The Inspector lets you invoke tools, browse resources, test prompts, and watch
+the notification stream. Use it as the first debugging step before integrating
+with Claude Desktop or another host.
+
+## Debugging common issues
+
+### `-32602 Invalid params` errors
+
+Usually a capability mismatch. Check the `initialize` exchange — one side is
+sending a request the other hasn't declared support for (e.g. server sends
+`sampling/createMessage` but client didn't declare `sampling` capability).
+
+### stdio server not connecting
+
+1. Verify stdout is not being written to (only JSON-RPC messages allowed).
+2. Run the server command directly in a terminal to check for startup errors.
+3. Check logs: `tail -f ~/Library/Logs/Claude/mcp*.log` (macOS).
+4. Always use absolute paths for server scripts and environment variables.
+
+### Environment variables missing
+
+stdio servers inherit a limited set of env vars from the launch context.
+Pass required vars explicitly in `claude_desktop_config.json`:
+
+```json
+{"mcpServers": {"myserver": {"command": "...", "env": {"API_KEY": "..."}}}}
+```
+
+### Testing changes
+
+- Config changes: restart the MCP client fully (close the window is not enough
+  for Claude Desktop — use Quit from the application menu).
+- Server code changes: restart the client.
+- During development: use MCP Inspector for rapid iteration without restarting.
