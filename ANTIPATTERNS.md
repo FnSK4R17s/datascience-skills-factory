@@ -23,6 +23,16 @@ and ordering correct.
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-04-23 — Subagent worktrees starved of gitignored inputs
+
+**What went wrong:** Spawned four parallel subagents in fresh worktrees (`git worktree add -b feat/<slug>-skill`) and told each to read its source material from `plan/<slug>/docs/`. The worktree was branched from `main`, and `plan/*/docs/` is gitignored (matches `docs/` in `.gitignore`), so the worktree was empty for that path. Agents could not see the 31-336 scraped doc files. Instead of stopping and escalating, all four agents silently fell back to training knowledge of the target libraries and shipped skills built from memory. For v1 APIs that had just released, that memory is stale. The orchestrator did not notice until a spot-check — one agent had mentioned the missing docs in its report, but the others just reported success.
+
+**Correct approach:** Worktrees isolate **writes**, not **inputs**. Never rely on relative paths inside a worktree for input that is not tracked. Pass the absolute path to the source-of-truth location on the host filesystem (`/apps/<repo>/plan/<slug>/docs/`) so worktrees and the main checkout read the same bytes. When a subagent discovers a required input is missing, it must abort with an error — not silently downgrade to training knowledge. Orchestrators: before spawning, verify that every input path named in the prompt exists from the agent's perspective (i.e., inside the worktree, not the main checkout).
+
+**Context:** `feat/{langchain,langgraph,mcp-python-sdk,python-telegram-bot}-skill` branches, commits `46f244e` / `122fde7` / `98134a9` / `4221875`. `.gitignore` line: `docs/`. Detected after merge + push; re-run required, pointing subagents at absolute `/apps/datascience-skills-factory/plan/<slug>/docs/`.
+
+---
+
 ## 2026-04-22 — Skill prescribed implementation instead of pointing at the problem
 
 **What went wrong:** Shipped `gpl-license-checker` as a 400-line Python stack (registry lookups, license-string normalizer, markdown-policy parser, SPDX classifier, shell wrapper, PreToolUse hook). Every layer rots independently and the ecosystem (PyPI / npm / crates / GitHub) keeps changing the fields it exposes — each drift needs a patch to the shipped code. The skill also froze one particular solution into place: future agents hitting this file are now reading my Python instead of solving the problem in whatever way is best at the time they read it. Worse, the first "fix" I wrote for this entry doubled down: "ship a script only when..." — turning the lesson into another prescription.
