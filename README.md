@@ -40,7 +40,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [mcp-python-sdk](skills/mcp-python-sdk/) | Build MCP servers and clients in Python — FastMCP (v1 stable) and MCPServer (v2 pre-alpha) decorator APIs, low-level Server, transports, OAuth 2.1, experimental tasks, and in-process testing | `npx skills add FnSK4R17s/datascience-skills-factory --skill mcp-python-sdk` |
 | [langchain](skills/langchain/) | Guide agents writing LangChain v1 Python code — `create_agent`, `@tool` + `ToolRuntime`, middleware, models, memory, multi-agent patterns, RAG, MCP integration, human-in-the-loop, streaming, structured output, and observability | `npx skills add FnSK4R17s/datascience-skills-factory --skill langchain` |
 | [langgraph](skills/langgraph/) | Build stateful, long-running agent workflows with LangGraph v1 — StateGraph, nodes and edges, checkpointers, interrupt/resume patterns, stream modes, and the Functional API | `npx skills add FnSK4R17s/datascience-skills-factory --skill langgraph` |
-| [python-telegram-bot](skills/python-telegram-bot/) | Build Telegram bots with python-telegram-bot v21+ — Application lifecycle, handlers + filters, ConversationHandler states, CallbackContext + JobQueue, inline callbacks, webhooks, and persistence | `npx skills add FnSK4R17s/datascience-skills-factory --skill python-telegram-bot` |
+| [python-telegram-bot](skills/python-telegram-bot/) | Build Telegram bots with python-telegram-bot v21+ — Application lifecycle, handlers + filters, ConversationHandler states, JobQueue, webhooks, persistence, rate limiting, payments, polls, deep linking, Mini Apps, and error handling | `npx skills add FnSK4R17s/datascience-skills-factory --skill python-telegram-bot` |
 
 ## Skill Structure
 
