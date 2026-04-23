@@ -4,11 +4,11 @@ description: >
   Build agents and LLM applications with LangChain v1+ (Python).
   Use when creating agents with tools, writing middleware, handling structured
   output, streaming agent steps or tokens, or composing multi-agent systems.
-  Triggers on: create_agent, langchain agent, LangChain tool calling,
-  LangChain middleware, LangChain structured output.
-  SKIP if the user is working with LangGraph directly (graph nodes/edges, StateGraph)
-  without going through create_agent — that is a LangGraph concern. SKIP if they ask
-  about LangSmith evaluation, LangSmith observability, or LangGraph Studio.
+  Triggers on: create_agent, LangChain tool calling, LangChain middleware,
+  LangChain streaming, LangChain memory.
+  SKIP if the user is working with LangGraph directly (StateGraph, nodes/edges)
+  without going through create_agent — that is a LangGraph concern. SKIP if they
+  ask about LangSmith evaluation or LangGraph Cloud in isolation from agent code.
 ---
 
 # LangChain v1+ (Python)
@@ -30,24 +30,17 @@ a single representation.
 - User is streaming agent progress or LLM tokens (`stream_mode`, `version="v2"`).
 - User is defining tools (`@tool`, `ToolRuntime`, state/context/store access).
 - User asks about MCP integration with LangChain agents.
+- User asks about RAG, retrieval, vector stores, or embeddings in a LangChain context.
+- User asks about multi-agent patterns (subagents, handoffs, routers, skills).
+- User asks about short-term or long-term memory (`checkpointer`, `store`).
+- User asks about human-in-the-loop approval flows for agents.
 
 ## When NOT to invoke
 
 - Pure LangGraph work (StateGraph, custom nodes, edges) — LangGraph skill applies.
-- LangSmith tracing, evaluation, or experiment management — Langfuse or LangSmith docs.
-- Frontend / React streaming UI — covered by LangChain's frontend docs, not this skill.
-- Deep Agents (`deepagents` package) specific features.
-
-## Reference files
-
-| File | Contents |
-|------|----------|
-| [`references/agents.md`](references/agents.md) | `create_agent` signature, model strings, invocation, `AgentState`, structured output via `response_format` |
-| [`references/tools.md`](references/tools.md) | `@tool` decorator, `ToolRuntime` (state/context/store/stream_writer), `ToolNode`, return types |
-| [`references/middleware.md`](references/middleware.md) | Hook decorators, `AgentMiddleware`, built-in middleware catalogue, dynamic model/tool patterns |
-| [`references/messages.md`](references/messages.md) | Message types, `content_blocks`, multimodal content blocks, `AIMessage` attributes |
-| [`references/streaming.md`](references/streaming.md) | Stream modes (`updates`, `messages`, `custom`), `version="v2"` format, reasoning token streaming |
-| [`references/structured-output.md`](references/structured-output.md) | `ToolStrategy`, `ProviderStrategy`, schema types, error handling |
+- LangSmith tracing/evaluation in isolation from agent code — see langfuse-tracing skill.
+- Frontend / React streaming UI (`useStream`, Next.js components) — JS/React concern.
+- Deep Agents (`deepagents` package) specific features beyond LangChain middleware.
 
 ## Key v1 API breaks (training data is likely wrong)
 
@@ -70,9 +63,10 @@ a single representation.
 pip install -U langchain          # Python 3.10+
 pip install -U langchain-openai   # per-provider packages
 pip install -U langchain-anthropic
+pip install langchain-mcp-adapters  # MCP tool integration
 ```
 
-Model identifier strings use the `"provider:model"` format (e.g. `"openai:gpt-4o"`,
+Model identifier strings use the `"provider:model"` format (e.g. `"openai:gpt-5.4"`,
 `"anthropic:claude-sonnet-4-6"`, `"google_genai:gemini-2.5-flash"`). The provider
 prefix can often be omitted when the model name is unambiguous.
 
@@ -86,7 +80,7 @@ def get_weather(city: str) -> str:
     return f"Sunny in {city}."
 
 agent = create_agent(
-    model="openai:gpt-4o",
+    model="openai:gpt-5.4",
     tools=[get_weather],
     system_prompt="You are a helpful assistant.",
 )
@@ -97,4 +91,60 @@ result = agent.invoke(
 # Access all content: result["messages"][-1].content_blocks
 ```
 
-See `references/agents.md` for structured output, custom state, and streaming.
+## Reference files
+
+| File | Contents |
+|------|----------|
+| [`references/agents.md`](references/agents.md) | `create_agent` signature, model strings, invocation, `AgentState`, structured output via `response_format`, dynamic model, multi-agent embedding |
+| [`references/tools.md`](references/tools.md) | `@tool` decorator, `ToolRuntime` (state/context/store/stream_writer/execution_info), `ToolNode`, return types |
+| [`references/middleware.md`](references/middleware.md) | Hook decorators, `AgentMiddleware` class, built-in middleware catalogue, dynamic model/tool patterns |
+| [`references/messages.md`](references/messages.md) | Message types, `content_blocks`, multimodal content blocks, `AIMessage` attributes, standard content block reference |
+| [`references/streaming.md`](references/streaming.md) | Stream modes (`updates`, `messages`, `custom`), `version="v2"` format, reasoning token streaming, custom updates from tools |
+| [`references/structured-output.md`](references/structured-output.md) | `ToolStrategy`, `ProviderStrategy`, schema types, error handling, standalone model structured output |
+| [`references/models.md`](references/models.md) | `init_chat_model`, provider config, standalone invocation, tool calling on raw models, token usage, `output_version` |
+| [`references/memory.md`](references/memory.md) | Short-term memory (checkpointer, `AgentState`), long-term memory (store), filesystem middleware, summarization |
+| [`references/multi-agent.md`](references/multi-agent.md) | Subagents (supervisor), handoffs (state machine), skills (progressive disclosure), router (fan-out), custom workflow |
+| [`references/context-engineering.md`](references/context-engineering.md) | Model context, tool context, life-cycle context, `ToolRuntime` data sources, middleware hooks for context control |
+| [`references/rag-and-retrieval.md`](references/rag-and-retrieval.md) | Indexing pipeline, agentic RAG tool pattern, two-step RAG chain, building blocks, SQL agent pattern |
+| [`references/human-in-the-loop.md`](references/human-in-the-loop.md) | `HumanInTheLoopMiddleware`, interrupt/resume flow, decision types (approve/edit/reject), production patterns |
+| [`references/mcp.md`](references/mcp.md) | `MultiServerMCPClient`, transport types (stdio/http/sse), custom MCP servers with FastMCP, stateful sessions |
+| [`references/observability-and-testing.md`](references/observability-and-testing.md) | LangSmith tracing, Studio local dev, deployment, unit testing with `GenericFakeChatModel`, integration tests, trajectory evals |
+
+## Short pointers (no dedicated reference)
+
+- **Guardrails** — implemented via middleware (`@before_model`, `@after_model`); built-in
+  `PIIMiddleware` covers email/credit card/IP redaction/masking/blocking. Custom guardrails
+  use deterministic regex or LLM-as-judge patterns (see `docs/guardrails.md`).
+- **Voice agents** — STT > `create_agent` > TTS pipeline; or native multimodal model APIs
+  (audio content blocks in messages). See `docs/voice-agent.md`.
+- **Context window management** — `SummarizationMiddleware`, `ContextEditingMiddleware`,
+  `LLMToolSelectorMiddleware` for large tool sets. All in `references/middleware.md`.
+- **Progressive disclosure / skills pattern** — load specialised prompts on-demand via tool
+  calls (the `llms.txt` / Agent Skills pattern). See `references/multi-agent.md` and
+  `docs/multi-agent__skills-sql-assistant.md`.
+- **Frontend integration** — `useStream` hook (JS/React); providers: AI Elements, assistant-ui,
+  CopilotKit, OpenUI. Out of scope for this skill — see `docs/frontend__overview.md`.
+- **LangSmith Studio** — local visual debugger; requires `langgraph-cli` and a
+  `langgraph.json` config. See `references/observability-and-testing.md`.
+- **Deployment** — LangSmith managed hosting (LangGraph Cloud); push to GitHub, link repo
+  in LangSmith Deployments. See `references/observability-and-testing.md`.
+- **Integration catalogue** — 700+ integrations; see `/oss/python/integrations/providers/overview`.
+  Provider-specific middleware (Anthropic prompt caching, OpenAI moderation, AWS Bedrock
+  caching) at `/oss/python/integrations/middleware/`.
+- **Philosophy / history** — LangChain v1.0 shipped 2025-10-20; replaces all chains/agents
+  with a single `create_agent` abstraction. `langchain-classic` for legacy code. See
+  `docs/philosophy.md`.
+- **academy.md** — scraped as an HTML page from a Thinkific LMS; no usable content.
+- **changelog-py.md** — scraped as raw HTML; use the live changelog at
+  `docs.langchain.com/oss/python/releases/changelog`.
+
+## Anti-recommendations
+
+- Do NOT call `model.bind_tools(...)` before passing the model to `create_agent` when
+  using `response_format` — this conflicts with structured output injection.
+- Do NOT use `Pydantic` models or dataclasses as `state_schema` — TypedDict only in v1+.
+- Do NOT hardcode `message.content` as plain text — use `message.text` or iterate
+  `message.content_blocks` to handle reasoning blocks, tool calls, etc.
+- Do NOT use `create_react_agent` (LangGraph primitive) when you want the high-level
+  LangChain agent factory — use `create_agent` instead.
+- Do NOT name tool parameters `config` or `runtime` — these are reserved by `ToolRuntime`.
