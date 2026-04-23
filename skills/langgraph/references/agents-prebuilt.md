@@ -1,114 +1,13 @@
-# Agents and Prebuilt Patterns
+# Prebuilt Agents Reference
 
-Source: `docs/overview.md`, `docs/workflows-agents.md`, `docs/quickstart.md`,
-`docs/thinking-in-langgraph.md`
+Source: `docs/overview.md`, `docs/workflows-agents.md`, `docs/quickstart.md`
 
-## create_react_agent
+## `create_react_agent` (LangChain)
 
-LangGraph ships a prebuilt `create_react_agent` factory for the standard
-LLM-tool loop (reason → act → observe). It is the fastest path to a working
-agent when the architecture is a straightforward tool-calling loop.
+The fastest way to build a tool-calling agent. Returns a compiled LangGraph graph.
 
 ```python
-from langgraph.prebuilt import create_react_agent
-from langchain.chat_models import init_chat_model
-from langchain.tools import tool
-
-@tool
-def add(a: int, b: int) -> int:
-    """Add two numbers."""
-    return a + b
-
-model = init_chat_model("claude-sonnet-4-6", temperature=0)
-agent = create_react_agent(model, tools=[add])
-
-result = agent.invoke({"messages": [{"role": "user", "content": "What is 2+3?"}]})
-```
-
-`create_react_agent` returns a compiled `StateGraph` using `MessagesState`.
-Add a `checkpointer` for persistence and `interrupt_before=["tools"]` for
-tool approval. Source: LangGraph overview and prebuilt module.
-
-## When to build a custom graph instead
-
-Use `create_react_agent` for the common LLM-plus-tools loop. Build a custom
-`StateGraph` when you need:
-- Multi-step workflows with non-LLM nodes.
-- Branching based on classification results.
-- Parallel fan-out and merge.
-- Fine-grained retry policies per node.
-- Human review at points other than before every tool call.
-
-Source: `docs/overview.md`.
-
-## Common workflow patterns (Graph API)
-
-Source: `docs/workflows-agents.md`
-
-### Prompt chaining
-
-Sequential nodes, each processing the output of the previous:
-
-```python
-builder = StateGraph(State)
-builder.add_node("step_1", step_1)
-builder.add_node("step_2", step_2)
-builder.add_edge(START, "step_1")
-builder.add_edge("step_1", "step_2")
-builder.add_edge("step_2", END)
-```
-
-### Routing / branching
-
-One node classifies and routes to different specialised nodes:
-
-```python
-def router(state: State) -> Command[Literal["path_a", "path_b"]]:
-    if state["intent"] == "a":
-        return Command(goto="path_a")
-    return Command(goto="path_b")
-```
-
-### Parallelization (fan-out / fan-in)
-
-Multiple outgoing edges from one node run branches in the same super-step:
-
-```python
-builder.add_edge("classify", "search_docs")
-builder.add_edge("classify", "fetch_history")
-builder.add_edge("search_docs", "draft")
-builder.add_edge("fetch_history", "draft")
-```
-
-Both `search_docs` and `fetch_history` run in parallel; `draft` runs after both
-complete. Source: `docs/workflows-agents.md`.
-
-### Map-reduce (Send API)
-
-Fan out over a dynamic list with separate state copies:
-
-```python
-from langgraph.types import Send
-
-def generate_subjects(state: State):
-    return [Send("write_section", {"subject": s}) for s in state["subjects"]]
-
-builder.add_conditional_edges("plan", generate_subjects)
-```
-
-Source: `docs/graph-api.md`.
-
-### Orchestrator-subagent
-
-One node decides what tasks to spawn; subgraph or `Send` carries out each task.
-The orchestrator coordinates; subagents specialise. Source: `docs/workflows-agents.md`.
-
-## Tool binding (LangChain integration)
-
-LangGraph does not require LangChain, but integrates naturally:
-
-```python
-from langchain.tools import tool
+from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 
 model = init_chat_model("claude-sonnet-4-6")
@@ -116,22 +15,144 @@ model = init_chat_model("claude-sonnet-4-6")
 @tool
 def search(query: str) -> str:
     """Search the web."""
-    ...
+    return f"Results for {query}"
 
-model_with_tools = model.bind_tools([search])
+agent = create_agent(model, tools=[search])
+result = agent.invoke({"messages": [{"role": "user", "content": "Find latest news"}]})
 ```
 
-The LLM node calls `model_with_tools.invoke(state["messages"])`. A separate
-tool node executes the tool calls in the returned message. Conditional edge
-routes back to the LLM node until no more tool calls. Source: `docs/quickstart.md`.
+`create_agent` (also exposed as `create_react_agent` in LangChain) implements a
+standard ReAct loop: LLM call → if tool call, run tool → append result → loop.
+It returns a `Pregel` instance (compiled graph) compatible with all LangGraph
+streaming and persistence features.
 
-## Error handling strategies in agents
+### With memory
 
-Source: `docs/thinking-in-langgraph.md`
+```python
+from langgraph.checkpoint.memory import InMemorySaver
 
-| Error type | Strategy |
-|------------|----------|
-| Transient (network, rate limit) | `RetryPolicy` on the node |
-| LLM-recoverable (tool failure, parse error) | Store error in state; `Command(goto="llm")` |
-| User-fixable (missing info) | `interrupt()` to collect from user |
-| Unexpected | Let propagate for debugging |
+agent = create_agent(model, tools=[search], checkpointer=InMemorySaver())
+config = {"configurable": {"thread_id": "user-session-1"}}
+
+agent.invoke({"messages": [{"role": "user", "content": "hi, I'm Alice"}]}, config)
+agent.invoke({"messages": [{"role": "user", "content": "what's my name?"}]}, config)
+```
+
+### With system prompt
+
+```python
+agent = create_agent(
+    model,
+    tools=[search],
+    prompt="You are a helpful research assistant. Always cite sources.",
+)
+```
+
+### Streaming
+
+```python
+for chunk in agent.stream(
+    {"messages": [{"role": "user", "content": "Search for LangGraph"}]},
+    config,
+    stream_mode="updates",
+    version="v2",
+):
+    if chunk["type"] == "updates":
+        print(chunk["data"])
+```
+
+## Custom agent with Graph API
+
+When `create_agent` is not flexible enough, build a custom ReAct agent:
+
+```python
+from langgraph.graph import StateGraph, MessagesState, START, END
+
+def call_llm(state: MessagesState):
+    response = model.invoke(state["messages"])
+    return {"messages": [response]}
+
+def call_tools(state: MessagesState):
+    tool_calls = state["messages"][-1].tool_calls
+    results = [tools_by_name[tc["name"]].invoke(tc) for tc in tool_calls]
+    return {"messages": results}
+
+def should_continue(state: MessagesState) -> Literal["tools", "__end__"]:
+    last = state["messages"][-1]
+    return "tools" if last.tool_calls else "__end__"
+
+builder = StateGraph(MessagesState)
+builder.add_node("agent", call_llm)
+builder.add_node("tools", call_tools)
+builder.add_edge(START, "agent")
+builder.add_conditional_edges("agent", should_continue)
+builder.add_edge("tools", "agent")
+graph = builder.compile()
+```
+
+## Workflow patterns
+
+### Sequential pipeline
+
+```python
+builder.add_edge(START, "step_a")
+builder.add_edge("step_a", "step_b")
+builder.add_edge("step_b", END)
+```
+
+### Conditional branching
+
+```python
+def route(state) -> Literal["branch_a", "branch_b"]:
+    return "branch_a" if state["flag"] else "branch_b"
+
+builder.add_conditional_edges("router", route)
+```
+
+### Parallel fan-out
+
+```python
+# Both run in the same super-step
+builder.add_edge(START, "node_a")
+builder.add_edge(START, "node_b")
+```
+
+### Map-reduce
+
+```python
+from langgraph.types import Send
+
+def dispatch(state):
+    return [Send("process", {"item": x}) for x in state["items"]]
+
+builder.add_conditional_edges("collect", dispatch)
+builder.add_edge("process", "aggregate")
+```
+
+### Loop with exit condition
+
+```python
+def should_retry(state) -> Literal["retry", "__end__"]:
+    return "retry" if state["needs_retry"] else "__end__"
+
+builder.add_conditional_edges("act", should_retry)
+builder.add_edge("retry", "act")
+```
+
+## Tool binding
+
+```python
+from langchain.tools import tool
+from langchain.chat_models import init_chat_model
+
+@tool
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers."""
+    return a * b
+
+model = init_chat_model("claude-sonnet-4-6")
+model_with_tools = model.bind_tools([multiply])
+```
+
+`bind_tools` registers tool schemas with the model so it can generate tool call
+requests. Use `@tool` decorator for functions or `StructuredTool` for class-based tools.

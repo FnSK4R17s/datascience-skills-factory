@@ -1,138 +1,161 @@
-# Persistence
+# Persistence Reference
 
-Source: `docs/persistence.md`
+Source: `docs/persistence.md`, `docs/add-memory.md`
 
 ## Why persistence
 
-A **checkpointer** saves a snapshot of graph state at every super-step. This
-enables:
-- **Human-in-the-loop** — inspect/modify state, resume after interrupt.
-- **Conversation memory** — state accumulates across calls on the same thread.
-- **Time travel** — replay or fork from any checkpoint.
-- **Fault tolerance** — resume from the last successful step after a node failure.
-  Pending writes from other nodes that completed in the same super-step are preserved
-  so those nodes do not re-run on resume.
+A checkpointer saves a snapshot of graph state after every super-step. This enables:
+- **Human-in-the-loop**: pause indefinitely, resume with human input.
+- **Conversation memory**: same thread retains prior messages across invocations.
+- **Time travel**: replay or fork from any past checkpoint.
+- **Fault tolerance**: resume from last successful step after a crash.
+- **Pending writes**: if a node fails, completed sibling nodes in the same step are
+  not re-run on resume.
 
 ## Threads
 
-A thread is identified by a `thread_id`. Every invocation with a checkpointer
-**must** include it:
+A thread is identified by `thread_id` inside `config["configurable"]`:
 
 ```python
-config = {"configurable": {"thread_id": "my-thread-1"}}
+config = {"configurable": {"thread_id": "user-123"}}
 graph.invoke(inputs, config)
 ```
 
-The checkpointer uses `thread_id` as the primary key. Without it, `interrupt()`
-cannot be resumed and state cannot be loaded. Source: `docs/persistence.md`.
+Reusing the same `thread_id` resumes the conversation. A new `thread_id` starts fresh.
 
-## Compiling with a checkpointer
+## Checkpointer setup
 
 ```python
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.memory import InMemorySaver       # dev/test only
 
 checkpointer = InMemorySaver()
 graph = builder.compile(checkpointer=checkpointer)
 ```
 
-`InMemorySaver` is for development/testing only. Use a persistent backend for
-production. Source: `docs/persistence.md`.
-
-## Checkpointer libraries
-
-| Package | Class | Use case |
-|---------|-------|----------|
-| `langgraph` (built-in) | `InMemorySaver` | Dev / testing |
-| `langgraph-checkpoint-sqlite` | `SqliteSaver` / `AsyncSqliteSaver` | Local / lightweight prod |
-| `langgraph-checkpoint-postgres` | `PostgresSaver` / `AsyncPostgresSaver` | Production (used by LangSmith) |
-| `langgraph-checkpoint-cosmosdb` | `CosmosDBSaver` / `AsyncCosmosDBSaver` | Azure production |
-
-For async graph execution (`ainvoke`, `astream`) use an async-capable checkpointer.
-Source: `docs/persistence.md`.
-
-## Reading state
+Production options (install separately):
+- `langgraph-checkpoint-sqlite` — `SqliteSaver` / `AsyncSqliteSaver`
+- `langgraph-checkpoint-postgres` — `PostgresSaver` / `AsyncPostgresSaver`
+- `langgraph-checkpoint-cosmosdb` — Azure Cosmos DB
 
 ```python
-# Latest snapshot for a thread
-snapshot = graph.get_state({"configurable": {"thread_id": "1"}})
-# snapshot.values  — state dict
-# snapshot.next    — tuple of node names to execute next; () means done
-# snapshot.metadata["step"]  — super-step counter
+from langgraph.checkpoint.postgres import PostgresSaver
+
+with PostgresSaver.from_conn_string("postgresql://...") as cp:
+    cp.setup()   # run once on first use
+    graph = builder.compile(checkpointer=cp)
+```
+
+For async graphs, use the async variant (`AsyncPostgresSaver`, etc.).
+
+## Reading and writing state
+
+```python
+# Latest state snapshot
+snap = graph.get_state(config)
+
+# Specific checkpoint
+snap = graph.get_state({"configurable": {"thread_id": "1", "checkpoint_id": "abc"}})
 
 # Full history (newest first)
-history = list(graph.get_state_history({"configurable": {"thread_id": "1"}}))
+history = list(graph.get_state_history(config))
+
+# Edit state (creates new checkpoint, does NOT roll back)
+graph.update_state(config, values={"foo": "new"}, as_node="node_a")
 ```
 
-Filter history to find specific checkpoints:
-```python
-# Checkpoint just before node_b ran
-before_b = next(s for s in history if s.next == ("node_b",))
+### StateSnapshot fields
 
-# Checkpoint created by an interrupt
-interrupted = next(
-    s for s in history
-    if s.tasks and any(t.interrupts for t in s.tasks)
-)
-```
-Source: `docs/persistence.md`.
+| Field | Description |
+|-------|-------------|
+| `values` | State channel values at this checkpoint |
+| `next` | Node names scheduled next; `()` means complete |
+| `config` | Contains `thread_id`, `checkpoint_ns`, `checkpoint_id` |
+| `metadata` | `source` ("input"/"loop"/"update"), `writes`, `step` counter |
+| `created_at` | ISO 8601 timestamp |
+| `parent_config` | Previous checkpoint config; `None` for first |
+| `tasks` | `PregelTask` list; includes `interrupts` field |
 
-## Updating state externally
+## Memory store (cross-thread long-term memory)
 
-`update_state` creates a new checkpoint with edited values. Updates go through
-reducers (channels with `operator.add` reducers **accumulate**, not overwrite).
-Use `as_node` to control which node the update is attributed to, which affects
-which node runs next:
+Checkpointers are per-thread. For data that should persist *across* threads, use a `Store`:
 
 ```python
-graph.update_state(config, {"foo": "new_value"}, as_node="node_a")
-```
+from langgraph.store.memory import InMemoryStore  # dev/test
 
-Source: `docs/persistence.md`.
-
-## Checkpoint namespace
-
-The `checkpoint_ns` field in config identifies which graph a checkpoint belongs to:
-- `""` — root/parent graph.
-- `"node_name:uuid"` — subgraph. Nested: `"outer:uuid|inner:uuid"`.
-
-Source: `docs/persistence.md`.
-
-## Serialization
-
-The default serializer (`JsonPlusSerializer`) handles LangChain/LangGraph
-primitives, datetimes, and enums. For types not supported (e.g. Pandas
-DataFrames), enable pickle fallback:
-
-```python
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
-
-graph.compile(checkpointer=InMemorySaver(serde=JsonPlusSerializer(pickle_fallback=True)))
-```
-
-For at-rest encryption, use `EncryptedSerializer` with `LANGGRAPH_AES_KEY`.
-Source: `docs/persistence.md`.
-
-## Cross-thread memory (Store)
-
-Checkpointers save state **per thread**. To share data across threads (e.g.
-user preferences across conversations), use a `Store`:
-
-```python
-from langgraph.store.memory import InMemoryStore
 store = InMemoryStore()
-
-# Compile with both checkpointer and store
 graph = builder.compile(checkpointer=checkpointer, store=store)
 ```
 
-Inside a node, access via `runtime.store`:
+Store operations use namespaced keys:
 
 ```python
-async def my_node(state: State, runtime: Runtime[Ctx]):
-    namespace = (runtime.context.user_id, "memories")
-    await runtime.store.aput(namespace, memory_id, {"memory": "likes pizza"})
-    results = await runtime.store.asearch(namespace, query="food", limit=3)
+namespace = (user_id, "memories")
+store.put(namespace, memory_id, {"text": "user prefers dark mode"})
+memories = store.search(namespace)                        # all items
+memories = store.search(namespace, query="dark", limit=3) # semantic search
 ```
 
-`InMemoryStore` supports semantic search when configured with an embedding model.
-For production, use `PostgresStore` or `RedisStore`. Source: `docs/persistence.md`.
+Each item is a `langgraph.store.base.Item` with `.value`, `.key`, `.namespace`,
+`.created_at`, `.updated_at`. Access as dict via `.dict()`.
+
+### Semantic search
+
+```python
+from langchain.embeddings import init_embeddings
+
+store = InMemoryStore(index={
+    "embed": init_embeddings("openai:text-embedding-3-small"),
+    "dims": 1536,
+    "fields": ["$"],     # fields to embed; "$" = whole value
+})
+```
+
+Production store: `PostgresStore` / `AsyncPostgresStore` or `RedisStore`.
+
+### Accessing store in nodes
+
+```python
+from langgraph.runtime import Runtime
+
+async def call_model(state, runtime: Runtime[Context]):
+    memories = await runtime.store.asearch(
+        (runtime.context.user_id, "mem"),
+        query=state["messages"][-1].content,
+        limit=3,
+    )
+    await runtime.store.aput(namespace, str(uuid.uuid4()), {"data": "..."})
+```
+
+## Checkpoint serialization
+
+Default serializer: `JsonPlusSerializer` (msgpack + JSON). For Pandas DataFrames or
+other non-serializable types:
+
+```python
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+graph.compile(checkpointer=InMemorySaver(serde=JsonPlusSerializer(pickle_fallback=True)))
+```
+
+### Encryption
+
+```python
+from langgraph.checkpoint.serde.encrypted import EncryptedSerializer
+
+serde = EncryptedSerializer.from_pycryptodome_aes()  # reads LANGGRAPH_AES_KEY env var
+checkpointer = SqliteSaver(conn, serde=serde)
+```
+
+On LangSmith, encryption is automatic when `LANGGRAPH_AES_KEY` is present.
+Custom schemes: implement `CipherProtocol` and pass to `EncryptedSerializer`.
+
+## Delete a thread
+
+```python
+checkpointer.delete_thread(thread_id)
+```
+
+## Super-steps and checkpointing frequency
+
+A super-step is one "tick" of the graph: all nodes scheduled for that step run
+(potentially in parallel), then state is saved. Sequential graph `A → B → C`
+produces checkpoints after input, A, B, and C — four checkpoints total.
