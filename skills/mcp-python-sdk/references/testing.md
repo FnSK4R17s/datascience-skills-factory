@@ -1,161 +1,136 @@
 # Testing MCP Servers
 
-Testing MCP servers in Python has two layers:
+Sources: `docs/testing.md`, `docs/migration.md`
 
-1. **Unit layer** — test handler logic in isolation, no transport.
-2. **Integration layer** — wire a real client and server through an in-process
-   transport, exercise the full JSON-RPC exchange.
+## In-process testing (recommended)
 
-Both layers matter. Unit tests are fast but miss protocol-level bugs (capability
-negotiation, message ordering, error code correctness). Integration tests catch
-these but are slower and harder to parameterize.
+The SDK provides an in-memory transport that connects a client and server
+without network overhead. This is the fastest and most reliable way to test
+MCP server logic.
 
-## In-process transport
+### v2: `Client` class (preferred)
 
-The SDK ships `mcp.server.memory` (sometimes imported via
-`mcp.server.models`) with an in-memory transport that connects client and
-server without network or subprocess overhead. This is the right tool for
-integration tests.
+`mcp.client.Client` accepts a server instance directly:
+
+```python
+from mcp.client import Client
+from mcp.server import MCPServer  # v2 name
+
+async with Client(server, raise_exceptions=True) as client:
+    result = await client.call_tool("add", {"a": 1, "b": 2})
+    assert result.content[0].text == "3"
+```
+
+`raise_exceptions=True` surfaces server-side errors as Python exceptions
+rather than returning `is_error=True` results.
+
+### v2: pytest pattern
 
 ```python
 import pytest
-from mcp import ClientSession
-from mcp.server.fastmcp import FastMCP
-from mcp.server.memory import create_connected_server_and_client_session
+from mcp import Client
+from mcp.types import CallToolResult, TextContent
+from inline_snapshot import snapshot
+
+from server import app  # your MCPServer or Server instance
 
 @pytest.fixture
-async def server():
-    mcp = FastMCP("test-server")
-
-    @mcp.tool()
-    async def add(x: int, y: int) -> int:
-        """Add two numbers."""
-        return x + y
-
-    return mcp
+def anyio_backend():
+    return "asyncio"
 
 @pytest.fixture
-async def client(server):
-    async with create_connected_server_and_client_session(server._server) as session:
-        yield session
+async def client():
+    async with Client(app, raise_exceptions=True) as c:
+        yield c
+
+@pytest.mark.anyio
+async def test_call_add_tool(client: Client):
+    result = await client.call_tool("add", {"a": 1, "b": 2})
+    assert result == snapshot(
+        CallToolResult(
+            content=[TextContent(type="text", text="3")],
+            structured_content={"result": 3},
+        )
+    )
 ```
 
-The exact import path for `create_connected_server_and_client_session` may
-vary by SDK version — check the SDK changelog and search the package for the
-current name if the above import fails.
+Source: `docs/testing.md`. The `inline-snapshot` library is optional but
+useful for snapshot assertions.
 
-## Writing async tests
+### v1: `create_connected_server_and_client_session`
 
-The MCP SDK is fully async. Use pytest-anyio or pytest-asyncio:
+In v1, the in-process helper was:
 
 ```python
-# pyproject.toml
+from mcp.shared.memory import create_connected_server_and_client_session
+
+async with create_connected_server_and_client_session(server) as session:
+    result = await session.call_tool("my_tool", {"x": 1})
+```
+
+This is removed in v2 — use `Client(server)` instead.
+
+### v2: low-level memory streams
+
+For transport-level testing (when you need direct `ClientSession` access):
+
+```python
+import anyio
+from mcp.client.session import ClientSession
+from mcp.shared.memory import create_client_server_memory_streams
+
+async with create_client_server_memory_streams() as (client_streams, server_streams):
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(lambda: server.run(*server_streams, server.create_initialization_options()))
+        async with ClientSession(*client_streams) as session:
+            await session.initialize()
+            result = await session.call_tool("my_tool", {"x": 1})
+        tg.cancel_scope.cancel()
+```
+
+`create_client_server_memory_streams` remains available in v2 in
+`mcp.shared.memory`.
+
+## What to test
+
+- Tool execution with valid inputs → correct output.
+- Tool execution with invalid inputs → `is_error=True` or raised exception.
+- Resource reads → expected content and MIME type.
+- Prompt retrieval → correct message structure.
+- Capabilities negotiation — verify `initialize_result.capabilities` reflects
+  registered handlers.
+
+## Dependency installation
+
+```bash
+# pytest + anyio required
+pip install "mcp[cli]" pytest anyio
+
+# optional: snapshot testing
+pip install inline-snapshot
+```
+
+## Async test configuration
+
+The SDK's async tests use `anyio`. Configure `anyio_backend` via fixture
+or `pytest.ini`:
+
+```ini
+# pytest.ini or pyproject.toml
 [tool.pytest.ini_options]
-asyncio_mode = "auto"  # pytest-asyncio auto mode
-
-# Or with anyio
-# anyio_backends = ["asyncio"]
+asyncio_mode = "auto"  # if using pytest-asyncio
 ```
 
-```python
-async def test_add_tool(client: ClientSession):
-    await client.initialize()
-    result = await client.call_tool("add", {"x": 3, "y": 4})
-    assert not result.isError
-    assert result.content[0].text == "7"
-```
+Or use the `anyio_backend` fixture as shown above to select the backend
+explicitly.
 
-## Testing error paths
+## Gotchas
 
-Verify that tools return proper error results (not exceptions) for invalid
-inputs:
-
-```python
-async def test_tool_error(client: ClientSession):
-    await client.initialize()
-    result = await client.call_tool("divide", {"x": 1, "y": 0})
-    assert result.isError
-    # isError = True means the tool returned an error TextContent block
-    # The session itself did not raise an exception
-```
-
-For protocol-level errors (wrong method, missing capability), expect
-`McpError` to be raised:
-
-```python
-from mcp import McpError
-
-async def test_unknown_tool(client: ClientSession):
-    await client.initialize()
-    with pytest.raises(McpError):
-        await client.call_tool("nonexistent_tool", {})
-```
-
-## Mocking transport for unit tests
-
-When you only want to test handler logic without any client involvement, call
-the handler function directly:
-
-```python
-# FastMCP: extract the underlying function
-from mypackage.server import mcp
-
-async def test_add_handler_directly():
-    # FastMCP stores the original function; call it directly
-    # This skips schema validation and protocol wrapping
-    result = await mcp._tool_manager.tools["add"].fn(x=3, y=4)
-    assert result == 7
-```
-
-Direct handler calls skip schema validation and capability checking — useful
-for unit testing logic but not for testing protocol conformance.
-
-## Testing resources
-
-```python
-async def test_resource_read(client: ClientSession):
-    await client.initialize()
-    result = await client.read_resource("mydata://items/42")
-    assert len(result.contents) == 1
-    assert "42" in result.contents[0].text
-```
-
-## Testing prompts
-
-```python
-async def test_prompt_get(client: ClientSession):
-    await client.initialize()
-    result = await client.get_prompt("analyze", {"topic": "async"})
-    assert len(result.messages) >= 1
-    assert result.messages[0].role == "user"
-```
-
-## Checking capability negotiation
-
-Verify the server declares the right capabilities:
-
-```python
-async def test_capabilities(client: ClientSession):
-    result = await client.initialize()
-    caps = result.capabilities
-    assert caps.tools is not None       # tools registered
-    assert caps.resources is not None   # resources registered
-    assert caps.prompts is None         # no prompts registered
-```
-
-## Common test pitfalls
-
-**Not calling `initialize()`.** Every client fixture must call
-`await session.initialize()` before any operation. Forgetting this produces
-confusing errors about unexpected message order.
-
-**Sharing sessions across tests.** Each test should get a fresh session.
-Use fixtures with function scope (pytest default).
-
-**Asserting on content type before checking `isError`.** If `result.isError`
-is True, `result.content` may still be populated with an error `TextContent`.
-Check `isError` first, then inspect content.
-
-**stdout pollution.** If any handler calls `print()`, it corrupts the stdio
-transport. In tests using the in-process transport this is harmless, but the
-habit will break stdio deployments. Use `ctx.info()` instead.
+- **`raise_exceptions=False` (default):** tool errors come back as
+  `result.is_error=True` with error text in `result.content`. Don't assert
+  on the happy path without checking `is_error` first.
+- **Snapshot drift:** inline-snapshot auto-updates snapshots on first run;
+  commit the generated snapshot values.
+- **Lifespan in tests:** if your server has a `lifespan` context manager,
+  `Client(server)` runs it end-to-end — ensure test fixtures clean up after
+  themselves.

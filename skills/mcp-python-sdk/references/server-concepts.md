@@ -1,119 +1,214 @@
-# MCP Server Concepts
+# Server Concepts
 
-An MCP server exposes three kinds of primitives: **tools**, **resources**, and
-**prompts**. Each primitive type maps to a distinct wire-protocol namespace.
-A server declares which primitives it supports at initialization; the client
-uses that declaration to know what it can request.
+Sources: `docs/README.md`, `docs/mcpio__docs__learn__server-concepts.md`,
+`docs/mcpio__specification__2025-11-25__basic__lifecycle.md`,
+`docs/mcpio__specification__2025-11-25__server__tools.md`,
+`docs/mcpio__specification__2025-11-25__server__resources.md`,
+`docs/mcpio__specification__2025-11-25__server__prompts.md`
 
-## Primitives
+## The three primitives
+
+MCP servers expose exactly three primitive types. Each has a distinct control
+model.
+
+| Primitive | Analogy | Who invokes | Side effects allowed |
+|-----------|---------|-------------|----------------------|
+| **Tools** | POST endpoint | Model (autonomous) | Yes |
+| **Resources** | GET endpoint | Application | No (read-only) |
+| **Prompts** | Template | User (explicit) | No |
 
 ### Tools
 
-Tools are callable units — functions the LLM (or host application) can invoke.
-They follow a request/response model and return structured content. Each tool
-has a name, a description (shown to the LLM), and an input schema (JSON Schema).
+Functions the LLM can call. Define inputs via JSON Schema (inferred from type
+annotations by FastMCP). The model decides when to call them based on context.
 
-Key design constraints:
-- Tool names must be unique within a server.
-- Input schemas must be valid JSON Schema; the SDK validates inputs against
-  the schema before invoking handlers.
-- Tool results can be text, images, embedded resources, or error content.
-- Tools may be annotated as read-only or destructive; clients use these hints
-  for permission UI (not enforcement).
+Protocol operations: `tools/list`, `tools/call`.
+
+Tools may require user consent before execution — MCP emphasizes human
+oversight. Approval dialogs, permission settings, and activity logs are
+common patterns in host applications.
+
+**Structured output** (v1 FastMCP): if the return type annotation is a
+Pydantic `BaseModel`, `TypedDict`, dataclass with type hints, or
+`dict[str, T]`, FastMCP auto-generates `outputSchema` and validates the
+return value. Primitives (`str`, `int`, etc.) and generic containers are
+wrapped in `{"result": value}`. Classes without type hints cannot be used for
+structured output.
+
+To suppress structured output on a typed return: pass `structured_output=False`
+to `@mcp.tool()`.
+
+For full protocol control, return `CallToolResult` directly — it accepts a
+`_meta` field that is passed to the client application without being exposed
+to the model.
 
 ### Resources
 
-Resources represent data the server exposes for the LLM to read — files,
-database rows, API responses. Resources are identified by URI. A server can
-expose static resources (fixed URIs) or templates (URI patterns with
-parameters).
+Read-only data sources. Clients (not the model) decide which resources to
+load into context. Two patterns:
 
-Key design constraints:
-- Resources are read-only from the protocol's perspective; mutation goes
-  through tools.
-- A server can emit `resources/list_changed` notifications to signal that
-  the resource list has changed.
-- Resource content can be text or binary (base64-encoded).
-- Resource templates follow RFC 6570 URI template syntax.
+- **Direct resources** — fixed URIs, e.g. `config://settings`.
+- **Resource templates** — URI templates with `{param}` placeholders,
+  e.g. `file:///{path}`. FastMCP maps template parameters to function
+  arguments automatically.
+
+Protocol operations: `resources/list`, `resources/templates/list`,
+`resources/read`, `resources/subscribe` (for change notifications).
+
+Each resource declares a MIME type for content handling. Resources support
+parameter completion — clients can suggest valid values as users type.
 
 ### Prompts
 
-Prompts are named, parameterized message templates the server exposes. The
-client requests a prompt by name and arguments; the server returns a list of
-messages suitable for injecting into an LLM conversation.
+Parameterized instruction templates. User-invoked (slash commands, command
+palettes, context menus). Prompts can reference resources and tools to create
+comprehensive workflows. They also support parameter completion.
 
-Key design constraints:
-- Prompt arguments may be required or optional.
-- Prompts are different from resources: they return `messages`, not raw content.
-- A server emits `prompts/list_changed` when the prompt catalog changes.
+Protocol operations: `prompts/list`, `prompts/get`.
 
 ## Capabilities
 
-Capabilities are declared during the `initialize` handshake. A server that
-does not declare a capability will not receive requests for it.
+Capabilities are declared during the `initialize` handshake and cannot be
+added retroactively. FastMCP infers capabilities from registered decorators —
+if you register a `@mcp.tool()`, the server advertises `tools` capability
+automatically.
 
-Capability keys used by the SDK:
+Key server capabilities:
 
-| Key | Enables |
-|-----|---------|
-| `tools` | `tools/list`, `tools/call` |
-| `resources` | `resources/list`, `resources/read`, `resources/templates/list` |
-| `resources.subscribe` | `resources/subscribe`, `resources/unsubscribe` |
-| `prompts` | `prompts/list`, `prompts/get` |
-| `logging` | `logging/setLevel`, log notifications |
-| `experimental` | experimental extensions (e.g. tasks) |
+| Capability | Meaning |
+|-----------|---------|
+| `tools` | Server exposes callable tools |
+| `resources` | Server provides readable resources |
+| `prompts` | Server offers prompt templates |
+| `logging` | Server emits structured log messages |
+| `completions` | Server supports argument autocompletion |
 
-FastMCP infers capabilities from registered handlers. The low-level `Server`
-class requires explicit declaration.
+Sub-capabilities: `listChanged` (push notifications when the list changes),
+`subscribe` (resources only — notify on specific resource changes).
 
 ## Lifecycle
 
+Three mandatory phases:
+
+1. **Initialization** — client sends `initialize` with its protocol version
+   and capabilities; server responds with its own; client sends `initialized`
+   notification. Neither side may send operation requests until this completes.
+
+2. **Operation** — normal request/response and notification exchange, subject
+   to negotiated capabilities.
+
+3. **Shutdown** — client closes the transport (stdin for stdio; HTTP
+   connection for HTTP). No protocol-level shutdown message is defined.
+
+**Version negotiation**: client proposes its latest version; server accepts
+or counters with its own latest. If the client does not support the server's
+version, it should disconnect.
+
+**Error during init**: a version mismatch returns JSON-RPC error code
+`-32602` with `supported` and `requested` fields.
+
+## Context object (FastMCP)
+
+Add `ctx: Context` as a typed parameter to any tool or resource function to
+access server internals within a request:
+
+```python
+@mcp.tool()
+async def my_tool(query: str, ctx: Context) -> str:
+    await ctx.info(f"Processing: {query}")
+    await ctx.report_progress(0.5, 1.0, message="halfway")
+    resource = await ctx.read_resource("data://source")
+    return resource
 ```
-client                            server
-  |  initialize(clientInfo, caps) -->  |
-  |  <-- initialize_result(caps)       |
-  |  initialized -->                   |   <-- operation phase begins
-  |                                    |
-  |  ... operation messages ...        |
-  |                                    |
-  |  close / transport EOF             |   <-- cleanup
+
+Context is injected by the framework. Do not instantiate it yourself.
+Available on `ctx`: `request_id`, `client_id`, `fastmcp` (server instance),
+`session` (raw `ServerSession`), `request_context` (lifespan state).
+
+## Lifespan (FastMCP)
+
+For startup/teardown (database connections, caches):
+
+```python
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def app_lifespan(server: FastMCP):
+    db = await Database.connect()
+    try:
+        yield AppContext(db=db)
+    finally:
+        await db.disconnect()
+
+mcp = FastMCP("My App", lifespan=app_lifespan)
+
+@mcp.tool()
+def query_db(ctx: Context) -> str:
+    db = ctx.request_context.lifespan_context.db
+    return db.query()
 ```
 
-The server MUST NOT send any operation responses before it receives
-`initialized`. The server SHOULD perform resource cleanup (close DB connections,
-flush buffers) when the transport signals EOF or when `close` is called.
+## Logging and notifications
 
-## Error handling
+Log through `ctx` to send messages to the client (not stdout):
 
-MCP defines a JSON-RPC error response shape. SDK conventions:
+```python
+await ctx.debug("detail")
+await ctx.info("status")
+await ctx.warning("heads up")
+await ctx.error("problem")
+```
 
-- Raise `McpError` with an appropriate `ErrorCode` from handler code.
-- `ErrorCode.MethodNotFound` — requested primitive doesn't exist.
-- `ErrorCode.InvalidParams` — input validation failure.
-- `ErrorCode.InternalError` — unexpected exception in handler.
+Notify clients of list changes: `await ctx.session.send_resource_list_changed()`.
 
-Unhandled exceptions in FastMCP handlers are automatically wrapped in
-`InternalError` responses. In the low-level server, you must catch and
-re-raise as `McpError` yourself, or the transport layer will return a
-generic error.
+**Never use `print()` in stdio servers** — it corrupts the JSON-RPC stream.
+Use `print(..., file=sys.stderr)` or a logger configured for stderr.
 
-## Resource subscriptions
+## Elicitation (FastMCP)
 
-A server that declares `resources.subscribe` lets clients subscribe to
-individual resource URIs. The server then sends `resources/updated`
-notifications when a subscribed resource changes. The update notification
-carries only the URI, not the new content — clients must re-read.
+Tools can request structured input from the user mid-execution:
 
-## Logging
+```python
+from pydantic import BaseModel
 
-Servers can emit log messages to the client via the `logging/message`
-notification. Clients that declared the `logging` capability in their init
-will receive these. Use the `Context` object in FastMCP (`ctx.info()`,
-`ctx.warning()`, etc.) rather than writing to stdout — stdout is the
-transport channel for stdio servers.
+class Prefs(BaseModel):
+    confirm: bool
+    date: str = "2024-12-26"
 
-## Completions
+@mcp.tool()
+async def book(date: str, ctx: Context) -> str:
+    if date == "2024-12-25":
+        result = await ctx.elicit("Pick another date?", schema=Prefs)
+        if result.action == "accept" and result.data:
+            return f"Booked for {result.data.date}"
+        return "Cancelled"
+    return f"Booked for {date}"
+```
 
-Servers can offer argument completion hints for prompt arguments and resource
-template parameters via the `completion/complete` request. Useful for building
-interactive UIs on top of MCP.
+`ElicitationResult` fields: `action` ("accept", "decline", "cancel"),
+`data` (validated model, only on accept), `validation_error`.
+
+For OAuth flows or external URLs, use `ctx.elicit_url()` or raise
+`UrlElicitationRequiredError`.
+
+## Sampling (FastMCP)
+
+Tools can request LLM completions through the client:
+
+```python
+from mcp.types import SamplingMessage, TextContent
+
+@mcp.tool()
+async def summarize(text: str, ctx: Context) -> str:
+    result = await ctx.session.create_message(
+        messages=[SamplingMessage(
+            role="user",
+            content=TextContent(type="text", text=f"Summarize: {text}"),
+        )],
+        max_tokens=200,
+    )
+    return result.content.text if result.content.type == "text" else str(result.content)
+```
+
+Sampling puts the client in control of LLM access, user approval, and model
+selection. The server never calls an LLM directly.

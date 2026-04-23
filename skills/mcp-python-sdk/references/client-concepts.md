@@ -1,160 +1,173 @@
-# MCP Client Concepts
+# Client Concepts
 
-An MCP client opens a session with a server, discovers its primitives, and
-calls them on behalf of a host application (typically an LLM orchestration
-layer). The Python SDK `ClientSession` handles the protocol state machine;
-the transport delivers bytes.
+Sources: `docs/mcpio__docs__learn__client-concepts.md`,
+`docs/mcpio__docs__develop__build-client.md`,
+`docs/mcpio__specification__2025-11-25__client__sampling.md`,
+`docs/mcpio__specification__2025-11-25__client__roots.md`,
+`docs/mcpio__specification__2025-11-25__client__elicitation.md`,
+`docs/migration.md`
 
-## Session lifecycle
+## Host vs client
 
-All client operations require an active, initialized session:
+The **host** is the application users interact with (Claude.ai, an IDE). The
+**client** is the protocol-level component: one client per server connection.
+The host manages multiple clients and the overall user experience.
+
+## Sessions
+
+A session covers one connected client-server pair. The Python SDK uses async
+context managers to manage session lifecycle:
 
 ```python
-from mcp import ClientSession
+from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+server_params = StdioServerParameters(command="python", args=["server.py"])
 
 async with stdio_client(server_params) as (read, write):
     async with ClientSession(read, write) as session:
         await session.initialize()
-        # session is now in operation phase
+        tools = await session.list_tools()
         result = await session.call_tool("my_tool", {"arg": "value"})
 ```
 
-`ClientSession` is an async context manager. Exiting the context sends a
-`close` notification and tears down the session cleanly. The outer context
-manager (`stdio_client` or the HTTP equivalent) manages the transport.
+`async with` is required — skipping it leaks connections and deadlocks tests.
 
-**Do not** share a `ClientSession` across concurrent tasks without external
-serialization — the session's internal state is not thread/task-safe.
+### High-level `Client` (v2 / testing)
 
-## Discovering primitives
-
-After `initialize()`, call the list methods to discover what the server exposes:
+v2 introduces `mcp.client.Client`, which accepts a server instance directly
+(no transport setup needed):
 
 ```python
-# List available tools
-tools_result = await session.list_tools()
-for tool in tools_result.tools:
-    print(tool.name, tool.description, tool.inputSchema)
+from mcp.client import Client
 
-# List resources
-resources_result = await session.list_resources()
-
-# List resource templates
-templates_result = await session.list_resource_templates()
-
-# List prompts
-prompts_result = await session.list_prompts()
+async with Client(server) as client:
+    result = await client.call_tool("my_tool", {"x": 1})
 ```
 
-Only call list methods for capability types the server declared during
-`initialize`. Calling `list_tools()` on a server that didn't declare the
-`tools` capability raises a `CapabilityError`.
+This is the recommended pattern for in-process testing (see `testing.md`).
+
+## Discovery
+
+After `initialize()`, the client can discover what the server offers:
+
+```python
+tools = await session.list_tools()           # list_tools().tools
+resources = await session.list_resources()   # list_resources().resources
+templates = await session.list_resource_templates()
+prompts = await session.list_prompts()
+```
+
+In v2, the cursor-based pagination parameter changed:
+
+```python
+# v2 pagination (use PaginatedRequestParams)
+from mcp.types import PaginatedRequestParams
+tools = await session.list_tools(params=PaginatedRequestParams(cursor="token"))
+```
+
+Server capabilities from the `initialize` result:
+
+```python
+# v1
+caps = session.get_server_capabilities()
+
+# v2
+result = session.initialize_result
+caps = result.capabilities
+server_info = result.server_info
+```
 
 ## Calling tools
 
 ```python
-result = await session.call_tool("tool_name", arguments={"key": "value"})
-for content in result.content:
-    if content.type == "text":
-        print(content.text)
-    elif content.type == "image":
-        # content.data is base64-encoded
-        pass
-    elif content.type == "resource":
-        # content.resource is an embedded resource
-        pass
-
-if result.isError:
-    # Tool returned an error result (not a protocol error)
-    handle_tool_error(result)
+result = await session.call_tool("tool_name", {"param": "value"})
+# result.content — list of content blocks (TextContent, etc.)
+# result.is_error — bool (v2 snake_case; v1 uses isError)
 ```
 
-Tool results use `isError` rather than raising an exception when the tool
-itself signals failure. Protocol-level errors (invalid params, method not
-found) raise `McpError`.
+Check `result.is_error` before using the content.
 
 ## Reading resources
 
 ```python
-resource_result = await session.read_resource("resource://my-server/data")
-for content in resource_result.contents:
-    if content.type == "text":
-        print(content.text)
-    elif content.type == "blob":
-        # content.blob is base64-encoded binary
-        pass
+resource = await session.read_resource("file:///path/to/file")
+# resource.contents — list of TextResourceContents or BlobResourceContents
 ```
 
-Resource URIs are server-defined. Discover the available URIs via
-`list_resources()` and `list_resource_templates()` first.
+In v2, the `uri` parameter accepts plain strings (not `AnyUrl`).
 
-## Getting prompts
+## Invoking prompts
 
 ```python
-prompt_result = await session.get_prompt(
-    "prompt_name",
-    arguments={"topic": "async Python"}
-)
-for message in prompt_result.messages:
-    print(message.role, message.content)
+prompt = await session.get_prompt("prompt_name", {"arg": "value"})
+# prompt.messages — list of PromptMessage
 ```
 
-Inject the returned `messages` list directly into an LLM API call.
+## Sampling (client-side feature)
 
-## Resource subscriptions
+Sampling allows a **server** to request LLM completions through the client.
+The client controls user approval and model access. This is a server-initiated
+call — the client must declare `sampling` capability and provide a callback.
+
+Flow: server sends `sampling/createMessage` → client shows user the request
+for optional approval → client calls the LLM → client optionally shows the
+response for approval → client returns the result to the server.
+
+Client must declare `sampling` in its capability list during `initialize`.
+
+## Elicitation (client-side feature)
+
+Servers can request structured user input mid-operation. The client presents
+UI and validates the response against the schema the server provides. The
+client must declare `elicitation` capability.
+
+Privacy rule: elicitation must never request passwords or API keys. Clients
+should warn about suspicious requests and let users review data before sending.
+
+## Roots
+
+Roots let clients tell servers which filesystem directories are in scope.
+They are advisory, not a security boundary — servers should respect them
+for well-behaved operations, but OS-level permissions enforce actual access.
+
+Roots use `file://` URIs only. The list can change dynamically; servers
+receive `roots/list_changed` notifications.
 
 ```python
-await session.subscribe_resource("resource://my-server/live-data")
-# The session will now receive resources/updated notifications for this URI
-# Unsubscribe when done:
-await session.unsubscribe_resource("resource://my-server/live-data")
+# Roots are passed as client capabilities during initialization
+# Application code sets them; exact API depends on the client implementation
 ```
 
-The SDK delivers update notifications via a callback registered with the
-session. See the notification handler pattern in the SDK docs.
+## Error handling
 
-## Sampling (client-side LLM calls)
-
-The MCP protocol defines a `sampling/createMessage` request that a server can
-send to the client, asking the client to run an LLM call and return the result.
-This enables server-side agentic patterns where the server orchestrates LLM
-calls through the client.
-
-To support sampling, register a handler before `initialize()`:
+Wrap all tool calls and resource reads:
 
 ```python
-async def handle_sampling(request):
-    # request.params has messages, modelPreferences, maxTokens, etc.
-    # Call your LLM here and return a CreateMessageResult
-    ...
+from mcp.shared.exceptions import MCPError  # v2; v1 uses McpError
 
-session = ClientSession(read, write, sampling_callback=handle_sampling)
+try:
+    result = await session.call_tool("my_tool", args)
+except MCPError as e:
+    print(f"Protocol error: {e.message}")
 ```
 
-The client must declare the `sampling` capability for the server to send
-sampling requests. The SDK includes this in the default capability set if
-a sampling callback is provided.
+Common errors: `FileNotFoundError` (server path), `Connection refused`
+(server not running), `Tool execution failed` (missing env vars on server).
 
-## Pagination
+## v1 → v2 client API changes
 
-`list_tools()`, `list_resources()`, and `list_prompts()` support cursor-based
-pagination for servers with large catalogs. Check `result.nextCursor` and
-pass it back as `cursor=` to fetch subsequent pages.
+Key renames that cause silent failures at runtime:
 
-## Elicitation
+| v1 | v2 |
+|----|----|
+| `result.isError` | `result.is_error` |
+| `tools.nextCursor` | `tools.next_cursor` |
+| `tool.inputSchema` | `tool.input_schema` |
+| `session.list_tools(cursor=...)` | `session.list_tools(params=PaginatedRequestParams(cursor=...))` |
+| `session.get_server_capabilities()` | `session.initialize_result.capabilities` |
+| `McpError` | `MCPError` (from `mcp.shared.exceptions` or top-level `mcp`) |
+| `McpError(ErrorData(...))` | `MCPError(code, message)` |
 
-The MCP 2025-11-25 spec adds an `elicitation/create` request — a server asking
-the client to prompt the human for input during a tool call. Register an
-elicitation callback on the session similar to the sampling callback pattern.
-This is marked experimental in some SDK versions; check the SDK changelog before
-relying on it.
-
-## Common errors
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `CapabilityError` | Called a list/call method the server didn't declare | Check `session.server_capabilities` before calling |
-| `McpError(MethodNotFound)` | Tool/resource/prompt name doesn't exist | Call the list method first to verify |
-| `McpError(InvalidParams)` | Arguments don't match the tool's input schema | Inspect `tool.inputSchema` |
-| Session deadlock on test teardown | `ClientSession` not exited via `async with` | Always use `async with ClientSession(...)` |
+Old camelCase names still work as constructor kwargs (Pydantic `populate_by_name=True`),
+but attribute access must use snake_case. Source: `docs/migration.md`.
