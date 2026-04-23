@@ -88,3 +88,23 @@ skills:
     suffix: ["🧙‍♂️"]
     name: Man mage
     reason: "Spell-checker — casts corrections on typos in source and docs"
+
+  langchain:
+    suffix: ["🔗"]
+    name: Link
+    reason: "Chain of runnables — LCEL composition"
+
+  langgraph:
+    suffix: ["🕸️"]
+    name: Spider web
+    reason: "Nodes + edges — stateful agent graphs"
+
+  mcp-python-sdk:
+    suffix: ["🔌"]
+    name: Electric plug
+    reason: "Protocol wiring — servers plug into clients"
+
+  python-telegram-bot:
+    suffix: ["✈️"]
+    name: Airplane
+    reason: "Telegram's paper plane — messaging dispatch"
