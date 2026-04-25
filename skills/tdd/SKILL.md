@@ -82,6 +82,14 @@ RIGHT (vertical):
 
 Before writing any code:
 
+- [ ] **Load plan-feature artifacts (if present).** When the argument is a `plan/<slug>/04-backlog-item.md` (or any file under `plan/`), read all four stage files in that directory before proposing slices:
+  1. `01-research.md` — codebase surface area, existing patterns, constraints
+  2. `02-requirements.md` — acceptance criteria, v1 scope, out-of-scope
+  3. `03-deep-research.md` — resolved design questions, risks, edge cases
+  4. `04-backlog-item.md` — the implementation spec with touchpoints and workflows
+
+  The backlog item is intentionally abstract — the stage files contain the concrete context (file paths discovered during research, integration wiring details, PTB/asyncio gotchas, etc.) that the backlog item omits by design. **Skipping the stage files produces incomplete slices.** Derive behaviors-to-test from the acceptance criteria in `02-requirements.md` and cross-check against the resolved questions in `03-deep-research.md`.
+
 - [ ] Confirm with user what interface changes are needed
 - [ ] Confirm with user which behaviors to test (prioritize)
 - [ ] Identify opportunities for [deep modules](references/deep-modules.md) (small interface, deep implementation)

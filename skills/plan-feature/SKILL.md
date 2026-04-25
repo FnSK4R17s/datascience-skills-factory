@@ -221,6 +221,41 @@ and opinionated enough to be useful.
 - Analogies are encouraged. "The scheduler is the dispatcher; the queue is
   the mailbox; the worker is the courier."
 
+### TDD-aware backlog items
+
+When the repo has a `tdd` skill installed (check for `.claude/agents/tdd-red.md`
+or `skills/tdd/` in the skills factory), the backlog item will likely be
+implemented via test-driven development. Shape the document to support vertical
+TDD slicing:
+
+1. **Touchpoints should suggest deep modules.** A deep module has a small
+   public interface hiding complex implementation (from "A Philosophy of
+   Software Design"). When describing a touchpoint, note when the interface
+   is narrow but the internal logic is substantial — the implementing agent
+   will use this to identify opportunities for deep modules that are easy to
+   test through their small surface area.
+
+2. **Acceptance criteria should map to TDD slices.** Each criterion is a
+   user-visible behavior that becomes one RED→GREEN cycle. Write them so each
+   can be tested through a public interface without mocking internals. Avoid
+   criteria that describe implementation steps ("uses asyncio.Queue") — describe
+   observable outcomes ("queued messages at /stop time appear in the discard
+   queue and are recoverable for 1 hour").
+
+3. **Workflows are integration test scripts.** Each numbered workflow is a
+   candidate integration test. The implementing agent will trace through the
+   workflow steps to identify which slices need to land before the workflow
+   is testable end-to-end.
+
+4. **"What makes this hard" feeds the slice order.** Hard problems often need
+   dedicated slices with careful test setup. Call out when a challenge affects
+   the testing strategy (e.g., "PTB's sequential dispatch blocks /stop behind
+   the running handler — test must set `block=False`").
+
+5. **The Example section is the tracer bullet.** The concrete scenario in
+   the Example is the first integration test the TDD agent should target.
+   Make the example exercise the critical path end-to-end.
+
 ### Do not include
 
 - No naming or branding discussion
