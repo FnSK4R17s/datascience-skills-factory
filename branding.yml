@@ -108,3 +108,8 @@ skills:
     suffix: ["✈️"]
     name: Airplane
     reason: "Telegram's paper plane — messaging dispatch"
+
+  nemoguardrails:
+    suffix: ["🛡️"]
+    name: Shield
+    reason: "Guardrails — safety barrier protecting LLM applications"

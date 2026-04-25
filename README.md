@@ -41,6 +41,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [langchain](skills/langchain/) | Guide agents writing LangChain v1 Python code — `create_agent`, `@tool` + `ToolRuntime`, middleware, models, memory, multi-agent patterns, RAG, MCP integration, human-in-the-loop, streaming, structured output, and observability | `npx skills add FnSK4R17s/datascience-skills-factory --skill langchain` |
 | [langgraph](skills/langgraph/) | Build stateful, long-running agent workflows with LangGraph v1 — StateGraph + Functional API, checkpointers, interrupts, streaming, durable execution, subgraphs, time travel, cross-thread memory, Pregel runtime, observability, deployment, and testing | `npx skills add FnSK4R17s/datascience-skills-factory --skill langgraph` |
 | [python-telegram-bot](skills/python-telegram-bot/) | Build Telegram bots with python-telegram-bot v21+ — Application lifecycle, handlers + filters, ConversationHandler states, JobQueue, webhooks, persistence, rate limiting, payments, polls, deep linking, Mini Apps, and error handling | `npx skills add FnSK4R17s/datascience-skills-factory --skill python-telegram-bot` |
+| [nemoguardrails](skills/nemoguardrails/) | Add programmable guardrails to LLM apps with NVIDIA NeMo Guardrails — config.yml + Colang flows, custom actions, RunnableRails / LangGraph integration, built-in guardrail catalog (content safety, jailbreak, PII, topic control, fact checking), deployment, and observability | `npx skills add FnSK4R17s/datascience-skills-factory --skill nemoguardrails` |
 
 ## Skill Structure
 
