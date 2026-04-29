@@ -42,6 +42,17 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [langgraph](skills/langgraph/) | Build stateful, long-running agent workflows with LangGraph v1 — StateGraph + Functional API, checkpointers, interrupts, streaming, durable execution, subgraphs, time travel, cross-thread memory, Pregel runtime, observability, deployment, and testing | `npx skills add FnSK4R17s/datascience-skills-factory --skill langgraph` |
 | [python-telegram-bot](skills/python-telegram-bot/) | Build Telegram bots with python-telegram-bot v21+ — Application lifecycle, handlers + filters, ConversationHandler states, JobQueue, webhooks, persistence, rate limiting, payments, polls, deep linking, Mini Apps, and error handling | `npx skills add FnSK4R17s/datascience-skills-factory --skill python-telegram-bot` |
 | [nemoguardrails](skills/nemoguardrails/) | Add programmable guardrails to LLM apps with NVIDIA NeMo Guardrails — config.yml + Colang flows, custom actions, RunnableRails / LangGraph integration, built-in guardrail catalog (content safety, jailbreak, PII, topic control, fact checking), deployment, and observability | `npx skills add FnSK4R17s/datascience-skills-factory --skill nemoguardrails` |
+| [multica](skills/multica/) | Work with the Multica platform — agents, issues, daemon, CLI, self-hosting, skills, autopilots, auth, and the full architecture. 25 reference docs from the official Multica documentation | `npx skills add FnSK4R17s/datascience-skills-factory --skill multica` |
+
+## Third-Party Skills
+
+Excellent skills from the community that are worth installing alongside ours.
+Each has a dedicated folder under `skills/` with a README and branding, but
+the actual skill code lives in the third-party repo — install from there.
+
+| Skill | What it does | Install |
+|-------|-------------|---------|
+| [opentui](skills/opentui/) | Build rich terminal UIs on a native Zig core — flexbox layout, React/Solid bindings, animation, keyboard management. By [Anomaly](https://anomaly.co) | `npx skills add anomalyco/opentui --skill opentui --global` |
 
 ## Skill Structure
 

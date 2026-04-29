@@ -38,3 +38,21 @@ The `## Skills` table in [README.md](README.md) must list **every** subdirectory
 - Each skill needs a branded `logo.png` — see [skills/brand-kit/](skills/brand-kit/) and [branding.yml](branding.yml).
 - `SKILL.md` is the only required file per skill. `BOOTSTRAP.md`, `references/`, `scripts/`, `assets/` are optional.
 - Do not invent install commands — the `npx skills add ...` form above is canonical.
+
+## Adding third-party skills
+
+Third-party skills are external skills worth mentioning — we don't maintain their code, only a reference folder with branding and a README.
+
+### Steps
+
+1. Create `skills/<skill-name>/` with three files:
+   - `EXTERNAL.md` — standard marker (copy from any existing external skill).
+   - `README.md` — branded description, install command, links to the upstream repo.
+   - `logo.png` — pull the favicon from their homepage and convert:
+     ```bash
+     curl -sL https://<homepage>/favicon.svg -o skills/<skill-name>/logo.svg
+     convert -background transparent -density 300 skills/<skill-name>/logo.svg -resize 168x168 skills/<skill-name>/logo.png
+     ```
+     If the favicon is `.ico` or `.png`, adjust accordingly. Do not create custom composite logos — use whatever the project already ships.
+2. Add a row to the `## Third-Party Skills` table in [README.md](README.md). Install command points to **their** repo, not ours.
+3. Do **not** add an entry to [branding.yml](branding.yml) — third-party skills use their own branding.
