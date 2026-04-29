@@ -19,6 +19,60 @@ The Multica CLI mirrors almost everything the Web UI can do (create issues,
 assign agents, start the daemon, and more). For the full set of flags and
 examples, run `multica <command> --help`.
 
+## Common recipes
+
+**List my tickets:**
+
+```bash
+multica auth status          # note your username
+multica issue list --assignee <username>
+```
+
+**Create an issue and assign it to an agent:**
+
+```bash
+multica issue create --title "Fix login bug" --priority high --assignee Claude-Local
+```
+
+**Filter issues by status and priority:**
+
+```bash
+multica issue list --status todo --priority high
+```
+
+**Reassign an issue to a different agent:**
+
+```bash
+multica issue assign <id> --to Gemini-Local
+```
+
+**Unassign an issue:**
+
+```bash
+multica issue assign <id> --unassign
+```
+
+**Find an issue ID:**
+
+```bash
+multica issue list                       # ID is the first column
+multica issue search "login bug"         # search by title/description
+multica issue list --output json | jq '.issues[] | {id, title}'  # extract IDs programmatically
+```
+
+**Get JSON output for scripting:**
+
+```bash
+multica issue list --output json
+multica agent list --output json
+```
+
+**List workspace members (to find assignee names):**
+
+```bash
+multica workspace members
+```
+
 ## Getting authenticated
 
 ```bash
@@ -62,7 +116,7 @@ For the difference between token types, see
 | `multica issue get <id>` | Show a single issue |
 | `multica issue create --title "..."` | Create a new issue |
 | `multica issue update <id> ...` | Update an issue (status, priority, assignee, etc.) |
-| `multica issue assign <id> --agent <slug>` | Assign to an agent (triggers a task immediately) |
+| `multica issue assign <id> --to <name>` | Assign to a member or agent (triggers agent task immediately) |
 | `multica issue status <id> --set <status>` | Shortcut to change status |
 | `multica issue search <query>` | Keyword search |
 | `multica issue runs <id>` | Show agent runs on an issue |
@@ -71,21 +125,78 @@ For the difference between token types, see
 | `multica issue subscriber <id> ...` | Nested: subscribe / unsubscribe |
 | `multica project list/get/create/update/delete/status` | Project CRUD |
 
+### `issue list` flags
+
+| Flag | Description |
+|---|---|
+| `--assignee <name>` | Filter by assignee (member or agent name) |
+| `--status <status>` | Filter by status (`backlog`, `todo`, `in_progress`, `in_review`, `done`, `blocked`, `cancelled`) |
+| `--priority <level>` | Filter by priority (`urgent`, `high`, `medium`, `low`) |
+| `--project <id>` | Filter by project ID |
+| `--limit <n>` | Max results (default 50) |
+| `--offset <n>` | Skip N issues for pagination |
+| `--output <fmt>` | `table` (default) or `json` |
+
+### `issue create` flags
+
+| Flag | Description |
+|---|---|
+| `--title <text>` | Issue title (required) |
+| `--description <text>` | Issue description (Markdown) |
+| `--assignee <name>` | Assignee (member or agent name) |
+| `--status <status>` | Initial status |
+| `--priority <level>` | Priority level |
+| `--project <id>` | Project ID |
+| `--parent <id>` | Parent issue ID (sub-issues) |
+| `--due-date <RFC3339>` | Due date |
+| `--attachment <path>` | File to attach (repeatable) |
+| `--output <fmt>` | `table` or `json` (default `json`) |
+
+### `issue assign` flags
+
+| Flag | Description |
+|---|---|
+| `--to <name>` | Assignee name (member or agent) |
+| `--unassign` | Remove current assignee |
+| `--output <fmt>` | `table` or `json` (default `json`) |
+
 ## Agents and skills
 
 | Command | Purpose |
 |---|---|
 | `multica agent list` | List the workspace's agents |
 | `multica agent get <slug>` | Show an agent's configuration |
-| `multica agent create ...` | Create an agent |
+| `multica agent create --name "..." --runtime-id <id>` | Create an agent |
 | `multica agent update <slug> ...` | Update an agent |
 | `multica agent archive <slug>` | Archive |
 | `multica agent restore <slug>` | Restore an archived agent |
 | `multica agent tasks <slug>` | Show an agent's task history |
 | `multica agent skills ...` | Nested: attach / detach skills |
 | `multica skill list/get/create/update/delete` | Skill CRUD |
-| `multica skill import ...` | Import a skill from GitHub, ClawHub, or the local machine |
+| `multica skill import --url <url>` | Import a skill from ClawHub or skills.sh |
 | `multica skill files ...` | Nested: manage a skill's files |
+
+### `agent list` flags
+
+| Flag | Description |
+|---|---|
+| `--include-archived` | Include archived agents |
+| `--output <fmt>` | `table` (default) or `json` |
+
+### `agent create` flags
+
+| Flag | Description |
+|---|---|
+| `--name <text>` | Agent name (required) |
+| `--runtime-id <id>` | Runtime ID (required) |
+| `--model <id>` | Model identifier (e.g. `claude-sonnet-4-6`, `openai/gpt-4o`) |
+| `--instructions <text>` | Agent instructions |
+| `--description <text>` | Agent description |
+| `--visibility <level>` | `private` (default) or `workspace` |
+| `--max-concurrent-tasks <n>` | Max concurrent tasks (default 6) |
+| `--custom-args <json>` | Custom CLI arguments as JSON array |
+| `--runtime-config <json>` | Runtime config as JSON string |
+| `--output <fmt>` | `table` or `json` (default `json`) |
 
 ## Autopilots
 

@@ -49,7 +49,7 @@ For the difference between token types, see [Authentication and tokens](/auth-to
 | `multica issue get <id>` | Show a single issue |
 | `multica issue create --title "..."` | Create a new issue |
 | `multica issue update <id> ...` | Update an issue (status, priority, assignee, etc.) |
-| `multica issue assign <id> --agent <slug>` | Assign to an agent (triggers a task immediately) |
+| `multica issue assign <id> --to <name>` | Assign to a member or agent (triggers agent task immediately) |
 | `multica issue status <id> --set <status>` | Shortcut to change status |
 | `multica issue search <query>` | Keyword search |
 | `multica issue runs <id>` | Show agent runs on an issue |
@@ -71,7 +71,7 @@ For the difference between token types, see [Authentication and tokens](/auth-to
 | `multica agent tasks <slug>` | Show an agent's task history |
 | `multica agent skills ...` | Nested: attach / detach skills |
 | `multica skill list/get/create/update/delete` | Skill CRUD |
-| `multica skill import ...` | Import a skill from GitHub, ClawHub, or the local machine |
+| `multica skill import --url <url>` | Import a skill from ClawHub or skills.sh |
 | `multica skill files ...` | Nested: manage a skill's files |
 
 ## Autopilots
