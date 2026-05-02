@@ -55,10 +55,14 @@ multica issue assign <id> --unassign
 **Find an issue ID:**
 
 ```bash
-multica issue list                       # ID is the first column
+multica issue list                       # ID column shows TRUNCATED UUIDs
 multica issue search "login bug"         # search by title/description
-multica issue list --output json | jq '.issues[] | {id, title}'  # extract IDs programmatically
+multica issue list --output json | jq '.issues[] | {id, title}'  # full UUIDs
 ```
+
+> **Important:** All commands that take an issue ID require **full UUIDs**. The
+> table output truncates IDs (e.g. `5e4e351a`) and those return 404. Always use
+> `--output json` to get full IDs when you need to pass them to other commands.
 
 **Get JSON output for scripting:**
 
