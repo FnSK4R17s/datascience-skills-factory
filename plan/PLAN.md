@@ -13,6 +13,7 @@ most-recently-touched first. Do not hand-edit unless you know why.
 
 | Feature | Research | Requirements | Deep Research | Backlog | Status |
 |---------|----------|--------------|---------------|---------|--------|
+| [sandcastle-skill](sandcastle-skill/) | [✅](sandcastle-skill/01-research.md) | [✅](sandcastle-skill/02-requirements.md) | [✅](sandcastle-skill/03-deep-research.md) | [✅](sandcastle-skill/04-backlog-item.md) | v1 done |
 | [gpl-license-checker-skill](gpl-license-checker-skill/) | [✅](gpl-license-checker-skill/01-research.md) | [✅](gpl-license-checker-skill/02-requirements.md) | [✅](gpl-license-checker-skill/03-deep-research.md) | [✅](gpl-license-checker-skill/04-backlog-item.md) | v1 done |
 | [langgraph-v1-skill](langgraph-v1-skill/) | [⏳](langgraph-v1-skill/01-research.md) | [⏳](langgraph-v1-skill/02-requirements.md) | [⏳](langgraph-v1-skill/03-deep-research.md) | [⏳](langgraph-v1-skill/04-backlog-item.md) | draft |
 | [langchain-v1-skill](langchain-v1-skill/) | [⏳](langchain-v1-skill/01-research.md) | [⏳](langchain-v1-skill/02-requirements.md) | [⏳](langchain-v1-skill/03-deep-research.md) | [⏳](langchain-v1-skill/04-backlog-item.md) | draft |

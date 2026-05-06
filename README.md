@@ -43,6 +43,7 @@ npx skills add FnSK4R17s/datascience-skills-factory
 | [python-telegram-bot](skills/python-telegram-bot/) | Build Telegram bots with python-telegram-bot v21+ — Application lifecycle, handlers + filters, ConversationHandler states, JobQueue, webhooks, persistence, rate limiting, payments, polls, deep linking, Mini Apps, and error handling | `npx skills add FnSK4R17s/datascience-skills-factory --skill python-telegram-bot` |
 | [nemoguardrails](skills/nemoguardrails/) | Add programmable guardrails to LLM apps with NVIDIA NeMo Guardrails — config.yml + Colang flows, custom actions, RunnableRails / LangGraph integration, built-in guardrail catalog (content safety, jailbreak, PII, topic control, fact checking), deployment, and observability | `npx skills add FnSK4R17s/datascience-skills-factory --skill nemoguardrails` |
 | [multica](skills/multica/) | Work with the Multica platform — agents, issues, daemon, CLI, self-hosting, skills, autopilots, auth, and the full architecture. 25 reference docs from the official Multica documentation | `npx skills add FnSK4R17s/datascience-skills-factory --skill multica` |
+| [sandcastle](skills/sandcastle/) | Orchestrate sandboxed AFK coding agents with Sandcastle (@ai-hero/sandcastle) — run/createSandbox/createWorktree API, agent and sandbox providers, branch strategies, prompt substitution, hooks, templates, and multi-agent workflows | `npx skills add FnSK4R17s/datascience-skills-factory --skill sandcastle` |
 
 ## Third-Party Skills
 

@@ -113,3 +113,8 @@ skills:
     suffix: ["🛡️"]
     name: Shield
     reason: "Guardrails — safety barrier protecting LLM applications"
+
+  sandcastle:
+    suffix: ["🏰"]
+    name: Castle
+    reason: "Sandcastle — sandboxed fortress for coding agents"
