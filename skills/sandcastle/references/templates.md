@@ -40,7 +40,7 @@ The most elaborate template. Fan-out / fan-in with review:
    branch. Uses RGR (Red-Green-Refactor) cycle. Commits with structured
    messages including task reference.
 3. **Reviewer** (N instances) — runs after each implementer that produced
-   commits. Feeds the diff via `` !`git diff {{SOURCE_BRANCH}}...{{BRANCH}}` ``.
+   commits. Feeds the diff via a shell expression running `git diff {{SOURCE_BRANCH}}...{{BRANCH}}`.
    Can use a different model for adversarial review (e.g. Codex reviewing
    Claude output).
 4. **Merger** — takes all branches + originating issues, merges to main with
@@ -73,13 +73,13 @@ makes that knob explicit (a single line in `main.ts`).
 
 ### Example review prompt pattern
 
-```markdown
-## Branch diff
-!`git diff {{SOURCE_BRANCH}}...{{BRANCH}}`
+Example review prompt (these are Sandcastle directives, not executable here):
 
-## Commits on this branch
-!`git log {{SOURCE_BRANCH}}..{{BRANCH}} --oneline`
-```
+    ## Branch diff
+    # !`git diff {{SOURCE_BRANCH}}...{{BRANCH}}`
+
+    ## Commits on this branch
+    # !`git log {{SOURCE_BRANCH}}..{{BRANCH}} --oneline`
 
 ## Backlog managers
 

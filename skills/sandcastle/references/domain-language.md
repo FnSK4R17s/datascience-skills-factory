@@ -49,11 +49,11 @@ Source: `CONTEXT.md` in the Sandcastle repo.
 | Term | Definition | Avoid |
 |------|-----------|-------|
 | **Inline prompt** | `prompt:` string, passed as-is. No substitution | "dynamic prompt", "string prompt" |
-| **Prompt template** | `promptFile:` with `{{KEY}}` and `` !`cmd` `` support | "prompt file" (that's the option name) |
+| **Prompt template** | `promptFile:` with `{{KEY}}` and shell expression support | "prompt file" (that's the option name) |
 | **Prompt argument** | Runtime value substituting a `{{KEY}}` placeholder | "prompt variable" (ambiguous with env vars) |
 | **Prompt argument substitution** | Replacing `{{KEY}}` placeholders with values | "interpolation", "variable substitution" |
-| **Prompt expansion** | Evaluating `` !`command` `` shell expressions in the sandbox | "prompt preprocessing" (too generic) |
-| **Shell expression** | `` !`command` `` marker evaluated inside the sandbox | "command" (overloaded), "inline command" |
+| **Prompt expansion** | Evaluating shell expressions (exclamation-backtick syntax) in the sandbox | "prompt preprocessing" (too generic) |
+| **Shell expression** | Exclamation-backtick marker evaluated inside the sandbox | "command" (overloaded), "inline command" |
 | **Built-in prompt argument** | Auto-injected by Sandcastle (`SOURCE_BRANCH`, `TARGET_BRANCH`). Cannot be overridden | "default prompt argument" |
 
 ## Hooks

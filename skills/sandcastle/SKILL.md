@@ -198,12 +198,12 @@ When to use each:
 
 - `{{KEY}}` — filled from `promptArgs`. Missing key = error in `run()`, but
   in `interactive()` Sandcastle prompts the user to type the value. Unused = warning.
-- `` !`command` `` — replaced by stdout. Commands run **inside the sandbox**
+- Sandcastle shell expressions (exclamation-backtick syntax) — replaced by stdout. Commands run **inside the sandbox**
   in parallel after `sandbox.onSandboxReady` hooks. Non-zero exit fails the run.
 - `{{SOURCE_BRANCH}}` and `{{TARGET_BRANCH}}` — auto-injected built-ins.
   Passing them in `promptArgs` is an error.
-- `` !`...` `` patterns inside arg *values* are inert text (safe for user content).
-- Expansion order: `{{KEY}}` first (host-side), then `` !`...` `` (sandbox-side).
+- Shell expression patterns inside arg *values* are inert text (safe for user content).
+- Expansion order: `{{KEY}}` first (host-side), then shell expressions (sandbox-side).
 
 ## Iteration and completion
 
@@ -325,7 +325,7 @@ The most elaborate template. Four agent roles:
 2. **Implementer** (N instances) — one per plan item, own sandbox, own branch
    (`sandcastle/issue-{id}-{slug}`).
 3. **Reviewer** (N instances) — runs after each implementer that produced
-   commits. Uses `` !`git diff` `` to feed the diff. Can use a different model
+   commits. Uses a shell expression running `git diff` to feed the diff. Can use a different model
    for adversarial review.
 4. **Merger** — merges all branches back to main with LLM-powered conflict
    resolution.

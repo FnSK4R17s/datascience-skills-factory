@@ -23,7 +23,7 @@ npx skills add FnSK4R17s/datascience-skills-factory --skill sandcastle
 - **Agent providers:** Claude Code, Codex, pi, opencode — with model and effort options
 - **Sandbox providers:** Docker, Podman, Vercel Firecracker microVMs, noSandbox, custom providers
 - **Branch strategies:** head, merge-to-head, branch — defaults, constraints, when-to-use
-- **Prompt system:** inline vs. file, `{{KEY}}` substitution, `` !`command` `` shell expansion, built-in placeholders
+- **Prompt system:** inline vs. file, `{{KEY}}` substitution, shell expression expansion, built-in placeholders
 - **Hooks:** host and sandbox scopes, ordering, timeouts, sudo
 - **Templates:** blank, simple-loop, sequential-reviewer, parallel-planner, parallel-planner-with-review
 - **Multi-agent workflows:** the four-role parallel-planner-with-review pattern (planner -> N implementers -> N reviewers -> merger)

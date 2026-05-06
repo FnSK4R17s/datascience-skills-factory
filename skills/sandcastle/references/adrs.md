@@ -59,7 +59,7 @@ worktrees that are in use. Stale worktrees are pruned at startup via
 ## ADR-0008: Inline prompts skip processing
 
 Inline `prompt:` strings skip all preprocessing — no `{{KEY}}` substitution,
-no `` !`command` `` expansion. This is intentional: inline prompts are for
+no shell expression expansion. This is intentional: inline prompts are for
 quick, literal instructions where substitution would be surprising.
 
 ## ADR-0009: Templates — no shared code
