@@ -58,6 +58,7 @@ Full details: [references/tasks.md](references/tasks.md)
 | [references/comments.md](references/comments.md) | Comment threads, replies, reactions, @mentions |
 | [references/inbox.md](references/inbox.md) | Notifications, subscriptions, @all, agents never notified |
 | [SKILL.md](SKILL.md) | Full CLI command reference |
+| [PLAYBOOK.md](PLAYBOOK.md) | Agent orchestration patterns: chaining, fan-out, batch ops, concurrency control, skill design rules, anti-patterns |
 | [references/cloud-quickstart.md](references/cloud-quickstart.md) | Sign up to first task in 5 minutes |
 | [references/self-host-quickstart.md](references/self-host-quickstart.md) | Docker self-hosting quickstart |
 | [references/environment-variables.md](references/environment-variables.md) | Full env var reference for self-hosted server |

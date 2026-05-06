@@ -14,6 +14,7 @@ description: >
 # Multica CLI command reference
 
 For platform overview and full docs index, see [INDEX.md](INDEX.md).
+For agent orchestration patterns (chaining, fan-out, batch ops, skill design), see [PLAYBOOK.md](PLAYBOOK.md).
 
 The Multica CLI mirrors almost everything the Web UI can do (create issues,
 assign agents, start the daemon, and more). For the full set of flags and
