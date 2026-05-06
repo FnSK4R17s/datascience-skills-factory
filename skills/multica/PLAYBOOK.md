@@ -12,6 +12,34 @@ The power of Multica is custom automation: create an agent for a task, attach th
 
 ---
 
+## Before You Automate — The Human Checklist
+
+Agents do the work. Humans do the thinking. If you skip the thinking and go straight to triggering agents, you'll get fast, confident, wrong output at scale. This checklist exists because we learned the hard way — 12 agents scaffolded when 5 were needed, all missing critical architecture because nobody read the PRD first.
+
+**Before creating agents, skills, or autopilots for a new workflow:**
+
+### 1. Read the source material yourself
+Don't delegate understanding. If the work is based on a PRD, architecture doc, or spec — read it. Not skim it. Read the tables, the footnotes, the status columns. The agent will execute your interpretation of the document, not the document itself. If your interpretation is wrong, the agent will scale that mistake across every issue in the batch.
+
+### 2. Map the scope explicitly
+Write down exactly what's in and what's out. "Scaffold all PRD agents" is not a scope — it's a wish. "Scaffold SPARC, ATLAS, SAGE, OPUS, and Agent Supervisor (the 5 Confirmed MVP agents per PRD §3b)" is a scope. If the document has priority tiers, phases, or MVP flags, respect them. Don't build Phase 3 work in Sprint 1.
+
+### 3. Understand the structure before encoding it
+If each agent has multiple capabilities, you need to know that BEFORE designing the pipeline. If existing code already covers some of the work, you need to know that BEFORE creating scaffolds. Run `ls`. Read the existing modules. Check what's already built. The 10 minutes you spend understanding the landscape saves hours of rework.
+
+### 4. Start with one, not twelve
+Run the pipeline on ONE issue first. Review the output. Is the architecture right? Is the output format what you expected? Did the agent follow the skill? Fix it on one before fanning out to a batch. A bug in the skill multiplied across 12 issues is 12x the rework.
+
+### 5. Review agent output before triggering the next agent
+When Agent A finishes, look at what it produced before @-mentioning Agent B. If Agent A's output is wrong, Agent B will build on a broken foundation. The 2 minutes you spend reading the comment saves the 30 minutes Agent B spends working with bad input.
+
+### 6. You are accountable for what ships
+Agents don't have judgment about what should exist. They build what you tell them to build. If you tell them to scaffold a Phase 3 agent that nobody needs, they will do it enthusiastically. If you tell them to use a pattern that contradicts the codebase, they will do it confidently. The human in the loop is not optional — it's the whole point.
+
+**The goal is not to remove humans from the loop. The goal is to remove the tedious parts so humans can focus on the decisions that matter.**
+
+---
+
 ## Pattern 1: Anchor Ticket + Fan-Out
 
 **When to use:** You have one big task that decomposes into many parallel subtasks.
