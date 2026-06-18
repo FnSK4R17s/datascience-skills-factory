@@ -98,5 +98,8 @@ Skills we've learned from, adapted, or directly built on top of. Credit where cr
 | Source | What we took | Where it lives |
 |--------|--------------|----------------|
 | [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) | The whole `tdd` skill — adapted verbatim. Soft-skill discipline reminder, anti-horizontal-slice framing, deep-modules and interface-design references | [skills/tdd/](skills/tdd/) |
+| [mattpocock/skills — grill-with-docs](https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs) (MIT) | A relentless interview to sharpen a plan or design, which also creates docs (ADRs and glossary) as it goes | Upstream — [skills/engineering/grill-with-docs/](https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs) |
+| [mattpocock/skills — handoff](https://github.com/mattpocock/skills/tree/main/skills/productivity/handoff) (MIT) | Compact the current conversation into a handoff document so another agent can continue the work, with a suggested-skills section and secret redaction | Upstream — [skills/productivity/handoff/](https://github.com/mattpocock/skills/tree/main/skills/productivity/handoff) |
+| [mattpocock/skills — teach](https://github.com/mattpocock/skills/tree/main/skills/productivity/teach) (MIT) | Teach the user a new skill or concept over multiple sessions, using the current directory as a stateful teaching workspace | Upstream — [skills/productivity/teach/](https://github.com/mattpocock/skills/tree/main/skills/productivity/teach) |
 
 Found a skill we should learn from? Open a PR adding the row.
