@@ -118,3 +118,8 @@ skills:
     suffix: ["🏰"]
     name: Castle
     reason: "Sandcastle — sandboxed fortress for coding agents"
+
+  voicebox:
+    suffix: ["🎙️"]
+    name: Studio microphone
+    reason: "Voice studio — TTS, cloning, dictation, recording"
